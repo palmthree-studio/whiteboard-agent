@@ -29,101 +29,38 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Wendy animation — 4 frames
+# Wendy logo
 # ─────────────────────────────────────────────────────────────────────────────
 
-clear_lines() {
-  local n="$1"
-  for ((i = 0; i < n; i++)); do
-    printf '\033[1A\033[2K'
+_wendy_decode() {
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    base64 -D
+  else
+    base64 -d
+  fi
+}
+
+show_wendy() {
+  local art_width=78
+  local cols
+  cols=$(tput cols 2>/dev/null || echo 80)
+  local pad=$(( (cols - art_width) / 2 ))
+  [[ $pad -lt 0 ]] && pad=0
+  local indent
+  indent=$(printf '%*s' "$pad" '')
+
+  read -r -d '' _WENDY << 'WENDYEND' || true
+G1swbRtbMG0gICAgICAgICAgICAgICAgICAgICAgICAgICAbWzM4OzU7MTA5beKUjBtbMzg7NTsxMDlt4pWUG1szODs1Ozc0beKWkRtbMzg7NTsxMDlt4pWTICAgICAgICAgICAgICAgIBtbMzg7NTsxMzlt4pWUG1szODs1OzEzNG3ilpEbWzM4OzU7MTM5beKVlBtbMzg7NTsxMzlt4pSMG1swbQobWzBtG1swbSAgICAgICAgICAgICAgICAgICAgIBtbMzg7NTsxMDlt4pSMG1szODs1OzEwOW3ilZQbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paR4paR4paR4paR4paRG1szODs1OzEwOW3ilJAgICAgICAgICAgICAgIBtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM5beKVlBtbMzg7NTsxMzlt4pSMG1swbQobWzBtG1swbSAgICAgICAgICAgICAgIBtbMzg7NTsxMDlt4pSMG1szODs1OzEwOW3ilZQbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRICAgICAgICAgICAgIBtbMzg7NTsxMzlt4pSMG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM5beKVlBtbMzg7NTsxMzlt4pSMG1swbQobWzBtG1swbSAgICAgICAgIBtbMzg7NTsxMDlt4pSMG1szODs1OzEwOW3ilZQbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1Ozc0beKWkSAgICAgICAgICAgG1szODs1OzEzOW3ilIwbWzM4OzU7MTM0beKWkRtbMzg7NTsxMzRt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMzg7NTsxMzlt4pWUG1szODs1OzEzOW3ilIwbWzBtChtbMG0bWzBtICAgG1szODs1OzEwOW3ilIwbWzM4OzU7MTA5beKVlBtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7NzRt4paRICAgICAgICAgIBtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMzg7NTsxMzlt4pWUG1szODs1OzEzOW3ilIwbWzBtChtbMG0bWzBtG1szODs1OzEwOW3ilZIbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTs3NG3ilpEgICAgICAgIBtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzOW3ilIAbWzBtChtbMG0bWzBtIBtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7MTAybeKWkRtbMzg7NTsxMDJt4paRG1szODs1OzEwMm3ilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTAybeKUkBtbMzg7NTsxNDRt4pSMG1szODs1OzE0NG3ilIzilIzilIzilIzilIwbWzM4OzU7MTM4beKVlBtbMzg7NTsxMzJt4paRG1szODs1OzEzMm3ilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTMzbeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1swbQobWzBtG1swbSAgG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTQzbeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTczbeKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxMzRt4paRG1swbQobWzBtG1swbSAgG1szODs1OzEwOW3ilJQbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paRG1szODs1Ozc0beKWkRtbMzg7NTs3M23ilpEbWzM4OzU7NzNt4paRG1szODs1OzczbeKWkRtbMzg7NTs3M23ilpEbWzM4OzU7Nzlt4paSG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paSG1szODs1OzE2N23ilpIbWzM4OzU7MTY4beKWkhtbMzg7NTsxNjht4paSG1szODs1OzE2OG3ilpIbWzM4OzU7MTY4beKWkRtbMzg7NTsxMzNt4paRG1szODs1OzEzM23ilpEbWzM4OzU7MTMzbeKWkRtbMzg7NTsxMzNt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMzg7NTsxMzRt4paRG1szODs1OzEzNG3ilpHilpHilpHilpHilpHilpHilpEbWzBtChtbMG0bWzBtICAgG1szODs1Ozc0beKVmRtbMzg7NTs3NG3ilpEbWzM4OzU7NzRt4paRG1szODs1OzczbeKWkRtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE2N23ilpIbWzM4OzU7MTY4beKWkhtbMzg7NTsxNjht4paSG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkeKWkRtbMzg7NTsxMzlt4pSAG1swbQobWzBtG1swbSAgICAbWzM4OzU7NzRt4pWaG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE2N23ilpIbWzM4OzU7MTY3beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNjht4paSG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMzg7NTsxMzRt4paRG1swbQobWzBtG1swbSAgICAgG1szODs1Ozc0beKWkRtbMzg7NTs3NG3ilpEbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpIbWzM4OzU7MTQzbeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpHilpHilpHilpHilpEbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTQzbSAbWzM4OzU7MTQzbSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5beKWkhtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkRtbMzg7NTsxNzltIBtbMzg7NTsxNzltIBtbMzg7NTsxNDNtIBtbMzg7NTsxNDNtIBtbMzg7NTsxNDNtIBtbMzg7NTsxNzltIBtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE2N23ilpIbWzM4OzU7MTY3beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxMzNt4paRG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMG0KG1swbRtbMG0gICAgICAbWzM4OzU7NzRt4paRG1szODs1OzczbeKWkhtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTQzbSAbWzM4OzU7MTQzbSAgICAgG1szODs1OzE3OW3ilpIbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paRG1szODs1OzE3OW0gG1szODs1OzE0M20gG1szODs1OzE0M20gICAgG1szODs1OzE3OW0gG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE2N23ilpIbWzM4OzU7MTY3beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNjdt4paSG1szODs1OzEzNG3ilpEbWzM4OzU7MTM0beKWkRtbMG0KG1swbRtbMG0gICAgICAbWzM4OzU7MTA5beKUlBtbMzg7NTs3NG3ilpEbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4pWZG1szODs1OzE3OW0gG1szODs1OzE0M20gG1szODs1OzE0M20gG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5bSAbWzM4OzU7MTQzbSAbWzM4OzU7MTQzbSAbWzM4OzU7MTQzbSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpHilpHilpHilpHilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNjdt4paSG1szODs1OzE2N23ilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpIbWzM4OzU7MTMzbeKWkRtbMzg7NTsxMzRt4paRG1swbQobWzBtG1swbSAgICAgICAbWzM4OzU7NzRt4pWZG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzEzNG3ilpEbWzM4OzU7MTM5beKUgBtbMG0KG1swbRtbMG0gICAgICAgIBtbMzg7NTs3M23ilZobWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE2N23ilpIbWzM4OzU7MTY3beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNjht4paSG1szODs1OzEzNG3ilpEbWzBtChtbMG0bWzBtICAgICAgICAgG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAgG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW3ilpIbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzEzM23ilpIbWzBtChtbMG0bWzBtICAgICAgICAgG1szODs1OzEwOG3ilZobWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW0gG1szODs1OzE0M20gG1szODs1OzE0M20gICAgICAgIBtbMzg7NTsxNDNtIBtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE2N23ilpIbWzM4OzU7MTY3beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNjdt4paSG1swbQobWzBtG1swbSAgICAgICAgICAbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilZobWzM4OzU7MTc5bSAbWzM4OzU7MTQzbSAbWzM4OzU7MTQzbSAgICAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5bSAbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW3ilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNjdt4paSG1szODs1OzE2N23ilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpIbWzM4OzU7MTM4beKWkRtbMG0KG1swbRtbMG0gICAgICAgICAgG1szODs1Ozc4bSAbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTsxNDNt4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzlt4paRG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW0gG1szODs1OzE3OW3ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1swbQobWzBtG1swbSAgICAgICAgICAbWzM4OzU7MTA4beKUlBtbMzg7NTs3OG3ilpIbWzM4OzU7Nzht4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE0M23ilpEbWzM4OzU7MTc5beKWkRtbMzg7NTsxNzlt4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRG1szODs1OzE3OW3ilpEbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE2N23ilZkbWzBtChtbMG0bWzBtICAgICAgICAgICAbWzM4OzU7Nzht4paSG1szODs1Ozc4beKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkuKWkhtbMzg7NTs3N23ilpIbWzM4OzU7MTA3beKWkRtbMzg7NTsxMDdt4paRG1szODs1OzEwN23ilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEbWzM4OzU7MTQzbeKWkhtbMzg7NTsxNDNt4pWaG1szODs1OzE0M20gG1szODs1OzE0M23ilpEbWzM4OzU7MTczbeKWkRtbMzg7NTsxNzNt4paRG1szODs1OzE3M23ilpEbWzM4OzU7MTczbeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkRtbMzg7NTsxNzNt4paRG1szODs1OzE3M23ilpIbWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzEzOG3ilIAbWzBtChtbMG0bWzBtICAgICAgICAgICAbWzM4OzU7Nzht4pWaG1szODs1Ozc4beKWkhtbMzg7NTs3OG3ilpLilpLilpLilpLilpLilpLilpLilpLilpLilpLilpIbWzM4OzU7Nzht4paSG1szODs1Ozc4beKVmhtbMzg7NTs3OG3ilZobWzM4OzU7Nzht4pWZG1szODs1OzEwOG3ilZkbWzM4OzU7MTA4beKVmRtbMzg7NTsxMDht4pSUICAgICAgICAgICAgICAgG1szODs1OzEzOG3ilJQbWzM4OzU7MTM4beKUlBtbMzg7NTsxMzht4pWZG1szODs1OzEzOG3ilZkbWzM4OzU7MTY3beKVmhtbMzg7NTsxNjdt4pWaG1szODs1OzE2N23ilZobWzM4OzU7MTY3beKWkhtbMzg7NTsxNjdt4paS4paS4paS4paS4paS4paS4paS4paS4paS4paS4paSG1szODs1OzE2N23ilpIbWzBtChtbMG0bWzBtICAgICAgICAgICAgG1szODs1Ozc4beKVmhtbMzg7NTs3OG3ilZobWzM4OzU7Nzht4pWaG1szODs1Ozc4beKVmRtbMzg7NTsxMDht4pWZG1szODs1OzEwOG3ilJQbWzM4OzU7MTA4beKUlCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBtbMzg7NTsxMzht4pSUG1szODs1OzEzOG3ilJQbWzM4OzU7MTM4beKVmRtbMzg7NTsxMzht4pWZG1szODs1OzEzMW3ilZobWzM4OzU7MTY3beKVmhtbMzg7NTsxNjdt4pWaG1szODs1OzEzOG3ilJQbWzBtCg==
+WENDYEND
+
+  printf '%s' "$_WENDY" | _wendy_decode | while IFS= read -r line; do
+    printf '%s%s
+' "$indent" "$line"
   done
+  printf '[0m
+'
 }
 
-# Frame 1 — face-on stack: yellow ticket in the foreground, edges of others peeking behind
-frame_1() {
-  printf '\n'
-  printf '             %s┌─%s%s┐%s%s┐%s%s┐%s%s┐%s\n' \
-    "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET" "$C_RED" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s          %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s          %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s          %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s└─%s└─%s└─%s└──────────┘%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN$C_YELLOW" "$C_RESET"
-  printf '\n'
-}
-
-# Frame 2 — face drawing itself on the yellow ticket
-frame_2() {
-  printf '\n'
-  printf '             %s┌─%s%s┐%s%s┐%s%s┐%s%s┐%s\n' \
-    "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET" "$C_RED" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s  %s◉%s    %s◉%s   %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s          %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s│ %s│%s│%s│%s│%s│%s│%s   ──────  %s│%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '             %s└─%s└─%s└─%s└──────────┘%s\n' \
-    "$C_VIOLET" "$C_BLUE" "$C_RED" "$C_GREEN$C_YELLOW" "$C_RESET"
-  printf '\n'
-}
-
-# Frame 3 — cards start sliding out from behind
-frame_3() {
-  printf '\n'
-  printf '         %s┌──┐%s    %s┌──┐%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET"
-  printf '         %s│  │%s    %s│  │%s    %s┌──────────┐%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '   %s┌──┐%s%s└──┘%s    %s└──┘%s    %s│ %s◉%s    %s◉%s   %s│%s   %s┌──┐%s\n' \
-    "$C_RED" "$C_RESET" "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET" "$C_YELLOW" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '   %s│  │%s              %s│          │%s   %s│  │%s\n' "$C_RED" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '   %s└──┘%s              %s│   ──────  │%s   %s└──┘%s\n' "$C_RED" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '                         %s└──────────┘%s\n' "$C_YELLOW" "$C_RESET"
-  printf '\n'
-}
-
-# Frame 4 — Wendy complete, arms raised
-frame_4() {
-  printf '\n'
-  printf '       %s┌──────┐%s          %s┌──────┐%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET"
-  printf '       %s│  /\\  │%s          %s│  /\\  │%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET"
-  printf '       %s│ /  \\ │%s          %s│ /  \\ │%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET"
-  printf '       %s└──────┘%s          %s└──────┘%s\n' "$C_VIOLET" "$C_RESET" "$C_BLUE" "$C_RESET"
-  printf '                %s┌──────────────┐%s\n' "$C_YELLOW" "$C_RESET"
-  printf '   %s┌──────┐%s   %s│  %s◉%s        %s◉%s    │%s   %s┌──────┐%s\n' \
-    "$C_RED" "$C_RESET" "$C_YELLOW" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '   %s│      │%s   %s│              │%s   %s│      │%s\n' "$C_RED" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '   %s│ Wendy│%s   %s│   ────────   │%s   %s│  Hi! │%s\n' "$C_RED" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '   %s└──────┘%s   %s└──────────────┘%s   %s└──────┘%s\n' "$C_RED" "$C_RESET" "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
-  printf '\n'
-}
-
-ascii_title() {
-  printf '\n'
-  printf '%s        _     _ _       _                         _                                _   %s\n' "$C_BOLD" "$C_RESET"
-  printf '%s __   _| |__ (_) |_ ___| |__   ___   __ _ _ __ __| |    __ _  __ _  ___ _ __  _ __| |_ %s\n' "$C_BOLD" "$C_RESET"
-  printf '%s \\ \\ / / `_ \\| | __/ _ \\ `_ \\ / _ \\ / _` | `__/ _` |   / _` |/ _` |/ _ \\ `_ \\| `__| __|%s\n' "$C_BOLD" "$C_RESET"
-  printf '%s  \\ V /| | | | | ||  __/ |_) | (_) | (_| | | | (_| |  | (_| | (_| |  __/ | | | |  | |_ %s\n' "$C_BOLD" "$C_RESET"
-  printf '%s   \\_/ |_| |_|_|\\__\\___|_.__/ \\___/ \\__,_|_|  \\__,_|___\\__,_|\\__, |\\___|_| |_|_|   \\__|%s\n' "$C_BOLD" "$C_RESET"
-  printf '%s                                                  |_____|     |___/                    %s\n' "$C_BOLD" "$C_RESET"
-  printf '\n'
-}
-
-play_animation() {
-  frame_1
-  sleep 0.6
-  clear_lines 8
-  frame_2
-  sleep 0.6
-  clear_lines 8
-  frame_3
-  sleep 0.6
-  clear_lines 8
-  frame_4
-  sleep 0.4
-}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -202,8 +139,7 @@ main() {
   require_cmd curl
   require_cmd uname
 
-  play_animation
-  ascii_title
+  show_wendy
 
   printf '%sWelcome to Whiteboard Agent.%s\n' "$C_BOLD" "$C_RESET"
   printf 'Wendy will guide you through setting up your local companion.\n\n'

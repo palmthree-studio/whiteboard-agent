@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install.sh — Whiteboard Agent installer (Wendy mascot + auth + binary)
-# Usage: curl -fsSL https://raw.githubusercontent.com/palmthree-studio/whiteboard-agent/master/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/palmthree-studio/whiteboard-agent/main/install.sh | bash
 
 set -euo pipefail
 
@@ -292,7 +292,7 @@ main() {
   ok "Binary installed: $binary_path"
 
   # ── Generate whiteboard_agent.md ──────────────────────────────────────────
-  local template_url="https://raw.githubusercontent.com/palmthree-studio/whiteboard-agent/master/scripts/whiteboard_agent_template.md"
+  local template_url="https://raw.githubusercontent.com/palmthree-studio/whiteboard-agent/main/scripts/whiteboard_agent_template.md"
   local md_path="$install_dir/whiteboard_agent.md"
   info "Generating $md_path"
   local template

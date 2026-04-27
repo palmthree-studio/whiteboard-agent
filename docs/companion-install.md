@@ -1,0 +1,41 @@
+# Installation du companion sur Machine A
+
+Le companion est le serveur qui tourne sur la machine de l'agent (Machine A).
+
+## Téléchargement
+
+```bash
+# macOS Apple Silicon
+curl -L https://github.com/palmthree-studio/whiteboard-agent/releases/latest/download/companion-macos-arm64 -o companion
+chmod +x companion
+
+# macOS Intel
+curl -L https://github.com/palmthree-studio/whiteboard-agent/releases/latest/download/companion-macos-x64 -o companion
+chmod +x companion
+
+# Linux x64
+curl -L https://github.com/palmthree-studio/whiteboard-agent/releases/latest/download/companion-linux-x64 -o companion
+chmod +x companion
+```
+
+## Lancement
+
+```bash
+./companion
+# Le companion démarre sur http://localhost:3001
+```
+
+## Lancement permanent (macOS)
+
+```bash
+# Avec pm2
+npm install -g pm2
+pm2 start ./companion --name whiteboard-companion
+pm2 save
+pm2 startup
+```
+
+## Variables d'environnement
+
+- `PORT` : port d'écoute (défaut : 3001)
+- `BOARDS_DIR` : dossier de stockage des boards (défaut : ~/.whiteboard/boards/)

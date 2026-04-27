@@ -132,6 +132,91 @@ detect_asset() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare tunnel helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+CLOUDFLARED_PID=""
+CLOUDFLARED_LOG=""
+
+cleanup_cloudflared() {
+  if [[ -n "$CLOUDFLARED_PID" ]]; then
+    kill "$CLOUDFLARED_PID" 2>/dev/null || true
+  fi
+  if [[ -n "$CLOUDFLARED_LOG" && -f "$CLOUDFLARED_LOG" ]]; then
+    rm -f "$CLOUDFLARED_LOG"
+  fi
+}
+
+print_cloudflared_install_hint() {
+  local os
+  os="$(uname -s)"
+  printf '\n%scloudflared is not installed.%s\n' "$C_YELLOW" "$C_RESET"
+  case "$os" in
+    Darwin)
+      printf 'Install on macOS:\n'
+      printf '  %sbrew install cloudflare/cloudflare/cloudflared%s\n' "$C_BOLD" "$C_RESET"
+      ;;
+    Linux)
+      printf 'Install on Linux (Debian/Ubuntu):\n'
+      printf '  %scurl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb%s\n' "$C_BOLD" "$C_RESET"
+      printf '  %ssudo dpkg -i cloudflared.deb%s\n' "$C_BOLD" "$C_RESET"
+      printf 'Other distros: see %shttps://github.com/cloudflare/cloudflared/releases/latest%s\n' "$C_BLUE" "$C_RESET"
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      printf 'Install on Windows:\n'
+      printf '  Download from %shttps://github.com/cloudflare/cloudflared/releases/latest%s\n' "$C_BLUE" "$C_RESET"
+      printf '  Or via winget: %swinget install --id Cloudflare.cloudflared%s\n' "$C_BOLD" "$C_RESET"
+      ;;
+    *)
+      printf 'See %shttps://github.com/cloudflare/cloudflared/releases/latest%s\n' "$C_BLUE" "$C_RESET"
+      ;;
+  esac
+  printf '\n'
+}
+
+# Launch cloudflared in background and capture the trycloudflare.com URL.
+# Echoes the URL on stdout when found, returns non-zero on timeout.
+start_temporary_tunnel() {
+  CLOUDFLARED_LOG="${TMPDIR:-/tmp}/cloudflared_$$.log"
+  : > "$CLOUDFLARED_LOG"
+
+  cloudflared tunnel --url http://localhost:3210 >"$CLOUDFLARED_LOG" 2>&1 &
+  CLOUDFLARED_PID=$!
+
+  local timeout=30
+  local elapsed=0
+  local url=""
+  local spinner='|/-\'
+  local i=0
+
+  while [[ $elapsed -lt $timeout ]]; do
+    if ! kill -0 "$CLOUDFLARED_PID" 2>/dev/null; then
+      printf '\n'
+      warn "cloudflared exited unexpectedly. Last output:"
+      tail -n 5 "$CLOUDFLARED_LOG" >&2 || true
+      CLOUDFLARED_PID=""
+      return 1
+    fi
+
+    url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "$CLOUDFLARED_LOG" 2>/dev/null | head -n1 || true)"
+    if [[ -n "$url" ]]; then
+      printf '\r%s  %s\n' "$(printf '%*s' 40 '')" ""
+      echo "$url"
+      return 0
+    fi
+
+    local c="${spinner:$((i % 4)):1}"
+    printf '\r%s  %sStarting Cloudflare tunnel… %s%s' "$C_DIM" "$C_RESET" "$c" "$C_RESET" >&2
+    i=$((i + 1))
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  printf '\r%s\r' "$(printf '%*s' 60 '')" >&2
+  return 1
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main flow
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -139,29 +224,68 @@ main() {
   require_cmd curl
   require_cmd uname
 
+  trap 'cleanup_cloudflared' EXIT INT TERM
+
   show_wendy
 
   printf '%sWelcome to Whiteboard Agent.%s\n' "$C_BOLD" "$C_RESET"
   printf 'Wendy will guide you through setting up your local companion.\n\n'
 
   # ── Cloudflare Tunnel ─────────────────────────────────────────────────────
-  printf '%sCloudflare Tunnel required%s\n' "$C_BOLD" "$C_RESET"
-  printf 'Whiteboard Agent exposes your companion on the internet via Cloudflare Tunnel.\n'
-  printf 'Documentation: %shttps://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/%s\n\n' \
-    "$C_BLUE" "$C_RESET"
-  printf '%sPress Enter when your Cloudflare URL is ready…%s' "$C_DIM" "$C_RESET"
-  read -r _
+  printf '%sCloudflare Tunnel%s\n' "$C_BOLD" "$C_RESET"
+  printf 'Whiteboard Agent exposes your companion on the internet via Cloudflare Tunnel.\n\n'
+  printf '  %s[1]%s Quick start — get a temporary URL now (changes on restart)\n' "$C_BOLD" "$C_RESET"
+  printf '  %s[2]%s I already have a permanent URL\n\n' "$C_BOLD" "$C_RESET"
 
-  # ── Public URL ────────────────────────────────────────────────────────────
-  local companion_url
+  local tunnel_choice
   while true; do
-    printf '\n%sYour companion public URL%s (e.g. https://wb.example.com): ' "$C_BOLD" "$C_RESET"
-    read -r companion_url
-    if [[ "$companion_url" =~ ^https://[a-zA-Z0-9.-]+ ]]; then
-      break
-    fi
-    warn "URL must start with https://"
+    printf '%sChoose%s [1/2]: ' "$C_BOLD" "$C_RESET"
+    read -r tunnel_choice
+    case "$tunnel_choice" in
+      1|2) break ;;
+      *) warn "Please enter 1 or 2." ;;
+    esac
   done
+
+  local companion_url=""
+
+  if [[ "$tunnel_choice" == "1" ]]; then
+    if ! command -v cloudflared >/dev/null 2>&1; then
+      print_cloudflared_install_hint
+      printf '%sPress Enter once cloudflared is installed…%s' "$C_DIM" "$C_RESET"
+      read -r _
+      if ! command -v cloudflared >/dev/null 2>&1; then
+        warn "cloudflared still not found — falling back to manual URL entry."
+        tunnel_choice="2"
+      fi
+    fi
+  fi
+
+  if [[ "$tunnel_choice" == "1" ]]; then
+    info "Launching temporary Cloudflare tunnel on http://localhost:3210…"
+    if companion_url="$(start_temporary_tunnel)" && [[ -n "$companion_url" ]]; then
+      ok "Temporary tunnel ready: $companion_url"
+      printf '%sTemporary URL — will change on restart.%s\n' "$C_DIM" "$C_RESET"
+      printf 'For a permanent URL, see: %shttps://github.com/palmthree-studio/whiteboard-agent/blob/main/docs/cloudflare-tunnel.md%s\n\n' \
+        "$C_BLUE" "$C_RESET"
+    else
+      warn "Could not capture a trycloudflare.com URL within 30s."
+      cleanup_cloudflared
+      CLOUDFLARED_PID=""
+      tunnel_choice="2"
+    fi
+  fi
+
+  if [[ "$tunnel_choice" == "2" ]]; then
+    while true; do
+      printf '\n%sYour companion public URL%s (e.g. https://wb.example.com): ' "$C_BOLD" "$C_RESET"
+      read -r companion_url
+      if [[ "$companion_url" =~ ^https://[a-zA-Z0-9.-]+ ]]; then
+        break
+      fi
+      warn "URL must start with https://"
+    done
+  fi
 
   # ── Username ──────────────────────────────────────────────────────────────
   local username

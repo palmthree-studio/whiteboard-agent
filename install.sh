@@ -82,11 +82,14 @@ require_cmd() {
 ask_password() {
   local prompt="$1"
   local var
-  printf '%s' "$prompt"
+  # Prompt and newline go to /dev/tty directly: ask_password is called via
+  # command substitution $(...) which captures stdout, so printf to stdout
+  # would be swallowed and the user would see no prompt.
+  printf '%s' "$prompt" >/dev/tty
   stty -echo
   IFS= read -r var
   stty echo
-  printf '\n'
+  printf '\n' >/dev/tty
   echo "$var"
 }
 
@@ -137,13 +140,19 @@ detect_asset() {
 
 CLOUDFLARED_PID=""
 CLOUDFLARED_LOG=""
+CLOUDFLARED_URL_FILE=""
 
 cleanup_cloudflared() {
+  # Restore terminal echo in case the script is killed during password prompt.
+  stty echo 2>/dev/null || true
   if [[ -n "$CLOUDFLARED_PID" ]]; then
     kill "$CLOUDFLARED_PID" 2>/dev/null || true
   fi
   if [[ -n "$CLOUDFLARED_LOG" && -f "$CLOUDFLARED_LOG" ]]; then
     rm -f "$CLOUDFLARED_LOG"
+  fi
+  if [[ -n "$CLOUDFLARED_URL_FILE" && -f "$CLOUDFLARED_URL_FILE" ]]; then
+    rm -f "$CLOUDFLARED_URL_FILE"
   fi
 }
 
@@ -175,10 +184,14 @@ print_cloudflared_install_hint() {
 }
 
 # Launch cloudflared in background and capture the trycloudflare.com URL.
-# Echoes the URL on stdout when found, returns non-zero on timeout.
+# Writes the URL to CLOUDFLARED_URL_FILE and returns non-zero on timeout.
+# Called directly (not via command substitution) so CLOUDFLARED_PID is set
+# in the parent shell's scope and the cleanup trap can kill the process.
 start_temporary_tunnel() {
   CLOUDFLARED_LOG="${TMPDIR:-/tmp}/cloudflared_$$.log"
+  CLOUDFLARED_URL_FILE="${TMPDIR:-/tmp}/cloudflared_url_$$.txt"
   : > "$CLOUDFLARED_LOG"
+  : > "$CLOUDFLARED_URL_FILE"
 
   cloudflared tunnel --url http://localhost:3210 </dev/null >"$CLOUDFLARED_LOG" 2>&1 &
   CLOUDFLARED_PID=$!
@@ -200,19 +213,19 @@ start_temporary_tunnel() {
 
     url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "$CLOUDFLARED_LOG" 2>/dev/null | head -n1 || true)"
     if [[ -n "$url" ]]; then
-      printf '\r%s  %s\n' "$(printf '%*s' 40 '')" ""
-      echo "$url"
+      printf '\r%s\r' "$(printf '%*s' 60 '')"
+      printf '%s' "$url" > "$CLOUDFLARED_URL_FILE"
       return 0
     fi
 
     local c="${spinner:$((i % 4)):1}"
-    printf '\r%s  %sStarting Cloudflare tunnel… %s%s' "$C_DIM" "$C_RESET" "$c" "$C_RESET" >&2
+    printf '\r%s  %sStarting Cloudflare tunnel… %s%s' "$C_DIM" "$C_RESET" "$c" "$C_RESET"
     i=$((i + 1))
     sleep 1
     elapsed=$((elapsed + 1))
   done
 
-  printf '\r%s\r' "$(printf '%*s' 60 '')" >&2
+  printf '\r%s\r' "$(printf '%*s' 60 '')"
   return 1
 }
 
@@ -267,7 +280,9 @@ main() {
 
   if [[ "$tunnel_choice" == "1" ]]; then
     info "Launching temporary Cloudflare tunnel on http://localhost:3210…"
-    if companion_url="$(start_temporary_tunnel)" && [[ -n "$companion_url" ]]; then
+    if start_temporary_tunnel; then
+      companion_url="$(cat "$CLOUDFLARED_URL_FILE")"
+      rm -f "$CLOUDFLARED_URL_FILE"
       ok "Temporary tunnel ready: $companion_url"
       printf '%sTemporary URL — will change on restart.%s\n' "$C_DIM" "$C_RESET"
       printf 'For a permanent URL, see: %shttps://github.com/palmthree-studio/whiteboard-agent/blob/main/docs/cloudflare-tunnel.md%s\n\n' \
@@ -275,7 +290,6 @@ main() {
     else
       warn "Could not capture a trycloudflare.com URL within 30s."
       cleanup_cloudflared
-      CLOUDFLARED_PID=""
       tunnel_choice="2"
     fi
   fi

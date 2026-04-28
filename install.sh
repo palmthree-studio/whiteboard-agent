@@ -193,7 +193,7 @@ start_temporary_tunnel() {
   : > "$CLOUDFLARED_LOG"
   : > "$CLOUDFLARED_URL_FILE"
 
-  cloudflared tunnel --url http://localhost:3210 </dev/null >"$CLOUDFLARED_LOG" 2>&1 &
+  cloudflared tunnel --url http://localhost:3001 </dev/null >"$CLOUDFLARED_LOG" 2>&1 &
   CLOUDFLARED_PID=$!
 
   local timeout=30
@@ -279,7 +279,7 @@ main() {
   fi
 
   if [[ "$tunnel_choice" == "1" ]]; then
-    info "Launching temporary Cloudflare tunnel on http://localhost:3210…"
+    info "Launching temporary Cloudflare tunnel on http://localhost:3001…"
     if start_temporary_tunnel; then
       companion_url="$(cat "$CLOUDFLARED_URL_FILE")"
       rm -f "$CLOUDFLARED_URL_FILE"

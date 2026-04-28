@@ -55,7 +55,7 @@ cloudflared tunnel route dns whiteboard-agent whiteboard.yourdomain.com
 ## Step 5 — Create the config file
 
 Replace `YOUR_TUNNEL_ID` and `whiteboard.yourdomain.com` accordingly.  
-The companion runs on port **3210** by default.
+The companion runs on port **3001** by default.
 
 ```bash
 mkdir -p ~/.cloudflared
@@ -65,7 +65,7 @@ credentials-file: ~/.cloudflared/YOUR_TUNNEL_ID.json
 
 ingress:
   - hostname: whiteboard.yourdomain.com
-    service: http://localhost:3210
+    service: http://localhost:3001
   - service: http_status:404
 EOF
 ```
@@ -104,7 +104,7 @@ sudo systemctl enable cloudflared
 If you just want to test without a domain, this gives you a temporary URL that changes on every restart:
 
 ```bash
-cloudflared tunnel --url http://localhost:3210
+cloudflared tunnel --url http://localhost:3001
 ```
 
 The URL appears in the terminal output. It expires when the process stops.

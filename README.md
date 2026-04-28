@@ -67,4 +67,15 @@ Add this to your Claude Desktop config, restart, and you're live.
 
 ---
 
+## CLI
+
+After install, the `wendy` CLI is available in your terminal:
+
+```bash
+wendy start    # Re-launch the companion (and Cloudflare tunnel if needed)
+wendy update   # Download and install the latest companion binary
+```
+
+---
+
 *Built by [Palmthree Studio](https://github.com/palmthree-studio)*

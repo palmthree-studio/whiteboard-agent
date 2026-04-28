@@ -226,6 +226,10 @@ main() {
 
   trap 'cleanup_cloudflared' EXIT INT TERM
 
+  # When piped via `curl | bash`, stdin is the pipe itself (EOF for reads).
+  # Redirect stdin to the terminal so all interactive reads work correctly.
+  exec < /dev/tty
+
   show_wendy
 
   printf '%sWelcome to Whiteboard Agent.%s\n' "$C_BOLD" "$C_RESET"

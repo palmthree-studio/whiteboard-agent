@@ -180,7 +180,7 @@ start_temporary_tunnel() {
   CLOUDFLARED_LOG="${TMPDIR:-/tmp}/cloudflared_$$.log"
   : > "$CLOUDFLARED_LOG"
 
-  cloudflared tunnel --url http://localhost:3210 >"$CLOUDFLARED_LOG" 2>&1 &
+  cloudflared tunnel --url http://localhost:3210 </dev/null >"$CLOUDFLARED_LOG" 2>&1 &
   CLOUDFLARED_PID=$!
 
   local timeout=30

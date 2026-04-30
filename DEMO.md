@@ -56,7 +56,6 @@ Restart Claude Desktop. The green **AI connected** badge appears in the top-righ
 | `remove_ticket` | Delete a ticket and its connectors |
 | `add_connector` | Draw an arrow between two tickets |
 | `remove_connector` | Remove a connector |
-| `apply_layout` | Auto-layout: `tree` (hierarchy) or `radial` (hub-and-spoke) |
 | `clear_board` | Remove all tickets and connectors |
 | `import_board` | Replace the entire board in one request |
 

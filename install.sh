@@ -364,10 +364,30 @@ main() {
     binary_path="$install_dir/companion.exe"
   fi
 
+  # Extract version (tag_name) from the release payload for the side-file.
+  local release_version
+  if command -v jq >/dev/null 2>&1; then
+    release_version="$(printf '%s' "$release_json" | jq -r '.tag_name // empty')"
+  else
+    release_version="$(printf '%s' "$release_json" \
+      | grep -Eo '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
+      | head -n1 \
+      | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+  fi
+  [[ -z "$release_version" ]] && release_version="unknown"
+
   info "Downloading $download_url"
-  curl -fsSL "$download_url" -o "$binary_path"
+  # --progress-bar shows a simple bar with size/speed; -L follows redirects;
+  # --fail keeps non-2xx responses from being silently saved as the binary.
+  # Progress goes to stderr so it doesn't pollute stdout if this is piped.
+  curl -L --fail --progress-bar -o "$binary_path" "$download_url"
   chmod +x "$binary_path"
   ok "Binary installed: $binary_path"
+
+  # Write the version side-file so \`wendy version\` and \`wendy update\` know
+  # what's currently installed.
+  printf '%s\n' "$release_version" > "$install_dir/version"
+  ok "Version: $release_version"
 
   # ── Generate whiteboard_agent.md ──────────────────────────────────────────
   local template_url="https://raw.githubusercontent.com/palmthree-studio/whiteboard-agent/main/scripts/whiteboard_agent_template.md"
@@ -403,6 +423,23 @@ main() {
 # The trycloudflare.com URL changes on every \`wendy start\`.
 
 set -euo pipefail
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+if [[ -n "\${NO_COLOR:-}" ]] || [[ "\${TERM:-dumb}" == "dumb" ]] || [[ ! -t 1 ]]; then
+  RED=""
+  GREEN=""
+  YELLOW=""
+  CYAN=""
+  BOLD=""
+  RESET=""
+else
+  RED=\$'\\033[0;31m'
+  GREEN=\$'\\033[0;32m'
+  YELLOW=\$'\\033[1;33m'
+  CYAN=\$'\\033[0;36m'
+  BOLD=\$'\\033[1m'
+  RESET=\$'\\033[0m'
+fi
 
 BINARY="${binary_path}"
 USERNAME="${username}"
@@ -443,7 +480,7 @@ start_temporary_tunnel() {
   while [[ \$elapsed -lt \$timeout ]]; do
     if ! kill -0 "\$CLOUDFLARED_PID" 2>/dev/null; then
       printf '\\n'
-      printf 'cloudflared exited unexpectedly. Last output:\\n' >&2
+      printf '%scloudflared exited unexpectedly. Last output:%s\\n' "\$RED" "\$RESET" >&2
       tail -n 5 "\$CLOUDFLARED_LOG" >&2 || true
       CLOUDFLARED_PID=""
       return 1
@@ -457,7 +494,7 @@ start_temporary_tunnel() {
     fi
 
     local c="\${spinner:\$((i % 4)):1}"
-    printf '\\r  Starting Cloudflare tunnel… %s' "\$c"
+    printf '\\r  %sStarting Cloudflare tunnel…%s %s' "\$CYAN" "\$RESET" "\$c"
     i=\$((i + 1))
     sleep 1
     elapsed=\$((elapsed + 1))
@@ -467,8 +504,18 @@ start_temporary_tunnel() {
   return 1
 }
 
+VERSION_FILE="\$HOME/.whiteboard-agent/version"
+
+cmd_version() {
+  if [ -f "\$VERSION_FILE" ]; then
+    printf '%swendy%s %s\\n' "\$BOLD" "\$RESET" "\$(cat "\$VERSION_FILE")"
+  else
+    printf '%sVersion unknown%s (no version file found)\\n' "\$YELLOW" "\$RESET"
+  fi
+}
+
 update_companion() {
-  local os arch asset download_url tmp_bin
+  local os arch asset download_url tmp_bin current latest
   os="\$(uname -s)"
   arch="\$(uname -m)"
 
@@ -477,25 +524,40 @@ update_companion() {
       case "\$arch" in
         arm64|aarch64) asset="companion-macos-arm64" ;;
         x86_64)        asset="companion-macos-x64" ;;
-        *) printf 'Unsupported macOS architecture: %s\\n' "\$arch" >&2; exit 1 ;;
+        *) printf '%sUnsupported macOS architecture: %s%s\\n' "\$RED" "\$arch" "\$RESET" >&2; exit 1 ;;
       esac
       ;;
     Linux)
       case "\$arch" in
         x86_64|amd64) asset="companion-linux-x64" ;;
-        *) printf 'Unsupported Linux architecture: %s\\n' "\$arch" >&2; exit 1 ;;
+        *) printf '%sUnsupported Linux architecture: %s%s\\n' "\$RED" "\$arch" "\$RESET" >&2; exit 1 ;;
       esac
       ;;
-    *) printf 'Unsupported OS: %s\\n' "\$os" >&2; exit 1 ;;
+    *) printf '%sUnsupported OS: %s%s\\n' "\$RED" "\$os" "\$RESET" >&2; exit 1 ;;
   esac
 
-  printf 'Fetching latest release info…\\n'
+  current=""
+  if [ -f "\$VERSION_FILE" ]; then
+    current="\$(cat "\$VERSION_FILE")"
+  fi
+
+  printf '%sChecking for updates…%s' "\$CYAN" "\$RESET"
   local release_json
-  release_json="\$(curl -fsSL https://api.github.com/repos/palmthree-studio/whiteboard-agent/releases/latest)"
+  release_json="\$(curl -sf https://api.github.com/repos/palmthree-studio/whiteboard-agent/releases/latest || true)"
+
+  if [[ -z "\$release_json" ]]; then
+    printf '\\n%sCould not reach GitHub. Check your connection.%s\\n' "\$RED" "\$RESET" >&2
+    exit 1
+  fi
 
   if command -v jq >/dev/null 2>&1; then
+    latest="\$(printf '%s' "\$release_json" | jq -r '.tag_name // empty')"
     download_url="\$(printf '%s' "\$release_json" | jq -r --arg n "\$asset" '.assets[] | select(.name == \$n) | .browser_download_url')"
   else
+    latest="\$(printf '%s' "\$release_json" \\
+      | grep -Eo '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \\
+      | head -n1 \\
+      | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\\1/')"
     download_url="\$(printf '%s' "\$release_json" \\
       | grep -E "browser_download_url" \\
       | grep -E "/\${asset}\\"" \\
@@ -503,28 +565,40 @@ update_companion() {
       | head -n1)"
   fi
 
-  if [[ -z "\$download_url" ]]; then
-    printf 'Could not find asset %s in the latest release.\\n' "\$asset" >&2
+  if [[ -z "\$latest" ]]; then
+    printf '\\n%sCould not parse latest release tag.%s\\n' "\$RED" "\$RESET" >&2
     exit 1
   fi
 
-  local version
-  version="\$(printf '%s' "\$release_json" | grep -Eo '"tag_name":"[^"]*"' | grep -Eo 'v[0-9][^"]*' | head -n1 || true)"
+  if [[ "\$current" == "\$latest" ]]; then
+    printf '\\n%sAlready up to date%s (%s)\\n' "\$GREEN" "\$RESET" "\$latest"
+    exit 0
+  fi
 
-  printf 'Downloading %s (%s)…\\n' "\$asset" "\${version:-unknown}"
+  printf '\\n%sUpdate available:%s %s → %s\\n' "\$YELLOW" "\$RESET" "\${current:-unknown}" "\$latest"
+
+  if [[ -z "\$download_url" ]]; then
+    printf '%sCould not find asset %s in the latest release.%s\\n' "\$RED" "\$asset" "\$RESET" >&2
+    exit 1
+  fi
+
+  printf '%sDownloading %s…%s\\n' "\$CYAN" "\$asset" "\$RESET"
   tmp_bin="\$(mktemp)"
-  curl -fsSL "\$download_url" -o "\$tmp_bin"
+  curl -L --progress-bar -o "\$tmp_bin" "\$download_url"
   chmod +x "\$tmp_bin"
   mv "\$tmp_bin" "\${BINARY}"
-  printf 'Updated to %s\\n' "\${version:-latest}"
-  printf 'Run \`wendy start\` to restart with the new version.\\n'
+  printf '%s\\n' "\$latest" > "\$VERSION_FILE"
+  printf '%sUpdated to %s%s\\n' "\$GREEN" "\$latest" "\$RESET"
+  printf 'Run %swendy start%s to restart with the new version.\\n' "\$BOLD" "\$RESET"
 }
 
 cmd_start() {
   trap 'cleanup_cloudflared' EXIT INT TERM
 
+  printf '%s%s  ⬡ wendy%s  companion ready\\n' "\$CYAN" "\$BOLD" "\$RESET"
+
   if ! command -v cloudflared >/dev/null 2>&1; then
-    printf 'cloudflared is not installed. Install it then re-run this script.\\n' >&2
+    printf '%scloudflared is not installed. Install it then re-run this script.%s\\n' "\$RED" "\$RESET" >&2
     exit 1
   fi
 
@@ -537,18 +611,18 @@ cmd_start() {
   # First-run: prompt for agent name if config.json doesn't exist
   CONFIG_FILE="\$HOME/.whiteboard-agent/config.json"
   if [ ! -f "\$CONFIG_FILE" ]; then
-    printf "What's your agent's name? (default: agent) "
+    printf "%sWhat's your agent's name?%s (default: agent) " "\$BOLD" "\$RESET"
     read -r agent_name < /dev/tty
     agent_name="\${agent_name:-agent}"
     printf '{"version":1,"agentName":"%s","createdAt":"%s"}\\n' \\
       "\$agent_name" \\
       "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "\$CONFIG_FILE"
-    printf 'Agent name saved: %s\\n' "\$agent_name"
+    printf '%sAgent name saved:%s %s\\n' "\$GREEN" "\$RESET" "\$agent_name"
   fi
 
-  printf 'Launching temporary Cloudflare tunnel on http://localhost:3001…\\n'
+  printf '%sLaunching temporary Cloudflare tunnel on http://localhost:3001…%s\\n' "\$CYAN" "\$RESET"
   if ! start_temporary_tunnel; then
-    printf 'Could not capture a trycloudflare.com URL within 30s.\\n' >&2
+    printf '%sCould not capture a trycloudflare.com URL within 30s.%s\\n' "\$RED" "\$RESET" >&2
     exit 1
   fi
 
@@ -556,11 +630,22 @@ cmd_start() {
   rm -f "\$CLOUDFLARED_URL_FILE"
 
   printf '\\n'
-  printf 'Temporary URL : %s\\n' "\$URL"
-  printf 'Username      : %s\\n' "\$USERNAME"
-  printf 'Binary        : %s\\n' "\$BINARY"
+  printf '%sTemporary URL%s : %s\\n' "\$BOLD" "\$RESET" "\$URL"
+  printf '%sUsername%s      : %s\\n' "\$BOLD" "\$RESET" "\$USERNAME"
+  printf '%sBinary%s        : %s\\n' "\$BOLD" "\$RESET" "\$BINARY"
   printf '\\n'
-  printf 'Note: this URL changes on every restart.\\n\\n'
+  printf '%sNote: this URL changes on every restart.%s\\n\\n' "\$YELLOW" "\$RESET"
+
+  # First-start help message — shown only once.
+  FIRST_START_FLAG="\$HOME/.whiteboard-agent/.started"
+  if [ ! -f "\$FIRST_START_FLAG" ]; then
+    touch "\$FIRST_START_FLAG"
+    printf '%sGetting started:%s\\n' "\$BOLD" "\$RESET"
+    printf '  Open %shttp://localhost:3001%s in your browser\\n' "\$CYAN" "\$RESET"
+    printf '  Your AI agent can connect via MCP at %shttp://localhost:3001/mcp%s\\n' "\$CYAN" "\$RESET"
+    printf '  Run %swendy update%s to check for new versions\\n' "\$BOLD" "\$RESET"
+    printf '  Run %swendy --help%s for all commands\\n\\n' "\$BOLD" "\$RESET"
+  fi
 
   exec env COMPANION_URL="\$URL" COMPANION_USERNAME="\$USERNAME" COMPANION_PASSWORD_HASH="\$PASSWORD_HASH" COMPANION_CONFIG_PATH="\$HOME/.whiteboard-agent/config.json" "\$BINARY"
 }
@@ -572,16 +657,21 @@ case "\${1:-}" in
   update)
     update_companion
     ;;
-  help|"")
-    printf 'Usage: wendy <command>\\n\\n'
-    printf 'Commands:\\n'
-    printf '  start    Re-launch the companion (and Cloudflare tunnel if needed)\\n'
-    printf '  update   Download and install the latest companion binary\\n'
+  version|--version|-v)
+    cmd_version
+    ;;
+  help|--help|-h|"")
+    printf '%sUsage:%s wendy <command>\\n\\n' "\$BOLD" "\$RESET"
+    printf '%sCommands:%s\\n' "\$BOLD" "\$RESET"
+    printf '  %sstart%s     Re-launch the companion (and Cloudflare tunnel if needed)\\n' "\$CYAN" "\$RESET"
+    printf '  %supdate%s    Check for and install the latest companion binary\\n' "\$CYAN" "\$RESET"
+    printf '  %sversion%s   Show the installed companion version\\n' "\$CYAN" "\$RESET"
+    printf '  %shelp%s      Show this help\\n' "\$CYAN" "\$RESET"
     exit 0
     ;;
   *)
-    printf 'Unknown command: %s\\n' "\${1}" >&2
-    printf 'Run \`wendy help\` for usage.\\n' >&2
+    printf '%sUnknown command:%s %s\\n' "\$RED" "\$RESET" "\${1}" >&2
+    printf 'Run %swendy help%s for usage.\\n' "\$BOLD" "\$RESET" >&2
     exit 1
     ;;
 esac
@@ -600,13 +690,40 @@ RUNSH
 
 set -euo pipefail
 
+# ── Colors ────────────────────────────────────────────────────────────────────
+if [[ -n "\${NO_COLOR:-}" ]] || [[ "\${TERM:-dumb}" == "dumb" ]] || [[ ! -t 1 ]]; then
+  RED=""
+  GREEN=""
+  YELLOW=""
+  CYAN=""
+  BOLD=""
+  RESET=""
+else
+  RED=\$'\\033[0;31m'
+  GREEN=\$'\\033[0;32m'
+  YELLOW=\$'\\033[1;33m'
+  CYAN=\$'\\033[0;36m'
+  BOLD=\$'\\033[1m'
+  RESET=\$'\\033[0m'
+fi
+
 BINARY="${binary_path}"
 USERNAME="${username}"
 PASSWORD_HASH="${password_hash}"
 COMPANION_URL_VALUE="${companion_url}"
 
+VERSION_FILE="\$HOME/.whiteboard-agent/version"
+
+cmd_version() {
+  if [ -f "\$VERSION_FILE" ]; then
+    printf '%swendy%s %s\\n' "\$BOLD" "\$RESET" "\$(cat "\$VERSION_FILE")"
+  else
+    printf '%sVersion unknown%s (no version file found)\\n' "\$YELLOW" "\$RESET"
+  fi
+}
+
 update_companion() {
-  local os arch asset download_url tmp_bin
+  local os arch asset download_url tmp_bin current latest
   os="\$(uname -s)"
   arch="\$(uname -m)"
 
@@ -615,25 +732,40 @@ update_companion() {
       case "\$arch" in
         arm64|aarch64) asset="companion-macos-arm64" ;;
         x86_64)        asset="companion-macos-x64" ;;
-        *) printf 'Unsupported macOS architecture: %s\\n' "\$arch" >&2; exit 1 ;;
+        *) printf '%sUnsupported macOS architecture: %s%s\\n' "\$RED" "\$arch" "\$RESET" >&2; exit 1 ;;
       esac
       ;;
     Linux)
       case "\$arch" in
         x86_64|amd64) asset="companion-linux-x64" ;;
-        *) printf 'Unsupported Linux architecture: %s\\n' "\$arch" >&2; exit 1 ;;
+        *) printf '%sUnsupported Linux architecture: %s%s\\n' "\$RED" "\$arch" "\$RESET" >&2; exit 1 ;;
       esac
       ;;
-    *) printf 'Unsupported OS: %s\\n' "\$os" >&2; exit 1 ;;
+    *) printf '%sUnsupported OS: %s%s\\n' "\$RED" "\$os" "\$RESET" >&2; exit 1 ;;
   esac
 
-  printf 'Fetching latest release info…\\n'
+  current=""
+  if [ -f "\$VERSION_FILE" ]; then
+    current="\$(cat "\$VERSION_FILE")"
+  fi
+
+  printf '%sChecking for updates…%s' "\$CYAN" "\$RESET"
   local release_json
-  release_json="\$(curl -fsSL https://api.github.com/repos/palmthree-studio/whiteboard-agent/releases/latest)"
+  release_json="\$(curl -sf https://api.github.com/repos/palmthree-studio/whiteboard-agent/releases/latest || true)"
+
+  if [[ -z "\$release_json" ]]; then
+    printf '\\n%sCould not reach GitHub. Check your connection.%s\\n' "\$RED" "\$RESET" >&2
+    exit 1
+  fi
 
   if command -v jq >/dev/null 2>&1; then
+    latest="\$(printf '%s' "\$release_json" | jq -r '.tag_name // empty')"
     download_url="\$(printf '%s' "\$release_json" | jq -r --arg n "\$asset" '.assets[] | select(.name == \$n) | .browser_download_url')"
   else
+    latest="\$(printf '%s' "\$release_json" \\
+      | grep -Eo '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \\
+      | head -n1 \\
+      | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\\1/')"
     download_url="\$(printf '%s' "\$release_json" \\
       | grep -E "browser_download_url" \\
       | grep -E "/\${asset}\\"" \\
@@ -641,24 +773,36 @@ update_companion() {
       | head -n1)"
   fi
 
-  if [[ -z "\$download_url" ]]; then
-    printf 'Could not find asset %s in the latest release.\\n' "\$asset" >&2
+  if [[ -z "\$latest" ]]; then
+    printf '\\n%sCould not parse latest release tag.%s\\n' "\$RED" "\$RESET" >&2
     exit 1
   fi
 
-  local version
-  version="\$(printf '%s' "\$release_json" | grep -Eo '"tag_name":"[^"]*"' | grep -Eo 'v[0-9][^"]*' | head -n1 || true)"
+  if [[ "\$current" == "\$latest" ]]; then
+    printf '\\n%sAlready up to date%s (%s)\\n' "\$GREEN" "\$RESET" "\$latest"
+    exit 0
+  fi
 
-  printf 'Downloading %s (%s)…\\n' "\$asset" "\${version:-unknown}"
+  printf '\\n%sUpdate available:%s %s → %s\\n' "\$YELLOW" "\$RESET" "\${current:-unknown}" "\$latest"
+
+  if [[ -z "\$download_url" ]]; then
+    printf '%sCould not find asset %s in the latest release.%s\\n' "\$RED" "\$asset" "\$RESET" >&2
+    exit 1
+  fi
+
+  printf '%sDownloading %s…%s\\n' "\$CYAN" "\$asset" "\$RESET"
   tmp_bin="\$(mktemp)"
-  curl -fsSL "\$download_url" -o "\$tmp_bin"
+  curl -L --progress-bar -o "\$tmp_bin" "\$download_url"
   chmod +x "\$tmp_bin"
   mv "\$tmp_bin" "\${BINARY}"
-  printf 'Updated to %s\\n' "\${version:-latest}"
-  printf 'Run \`wendy start\` to restart with the new version.\\n'
+  printf '%s\\n' "\$latest" > "\$VERSION_FILE"
+  printf '%sUpdated to %s%s\\n' "\$GREEN" "\$latest" "\$RESET"
+  printf 'Run %swendy start%s to restart with the new version.\\n' "\$BOLD" "\$RESET"
 }
 
 cmd_start() {
+  printf '%s%s  ⬡ wendy%s  companion ready\\n' "\$CYAN" "\$BOLD" "\$RESET"
+
   # Some launch contexts (double-click, launchers) don't attach a tty to stdin.
   # Re-attach so first-run prompts work correctly.
   if [[ ! -t 0 ]]; then
@@ -668,13 +812,24 @@ cmd_start() {
   # First-run: prompt for agent name if config.json doesn't exist
   CONFIG_FILE="\$HOME/.whiteboard-agent/config.json"
   if [ ! -f "\$CONFIG_FILE" ]; then
-    printf "What's your agent's name? (default: agent) "
+    printf "%sWhat's your agent's name?%s (default: agent) " "\$BOLD" "\$RESET"
     read -r agent_name < /dev/tty
     agent_name="\${agent_name:-agent}"
     printf '{"version":1,"agentName":"%s","createdAt":"%s"}\\n' \\
       "\$agent_name" \\
       "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "\$CONFIG_FILE"
-    printf 'Agent name saved: %s\\n' "\$agent_name"
+    printf '%sAgent name saved:%s %s\\n' "\$GREEN" "\$RESET" "\$agent_name"
+  fi
+
+  # First-start help message — shown only once.
+  FIRST_START_FLAG="\$HOME/.whiteboard-agent/.started"
+  if [ ! -f "\$FIRST_START_FLAG" ]; then
+    touch "\$FIRST_START_FLAG"
+    printf '\\n%sGetting started:%s\\n' "\$BOLD" "\$RESET"
+    printf '  Open %shttp://localhost:3001%s in your browser\\n' "\$CYAN" "\$RESET"
+    printf '  Your AI agent can connect via MCP at %shttp://localhost:3001/mcp%s\\n' "\$CYAN" "\$RESET"
+    printf '  Run %swendy update%s to check for new versions\\n' "\$BOLD" "\$RESET"
+    printf '  Run %swendy --help%s for all commands\\n\\n' "\$BOLD" "\$RESET"
   fi
 
   exec env \\
@@ -692,16 +847,21 @@ case "\${1:-}" in
   update)
     update_companion
     ;;
-  help|"")
-    printf 'Usage: wendy <command>\\n\\n'
-    printf 'Commands:\\n'
-    printf '  start    Re-launch the companion (and Cloudflare tunnel if needed)\\n'
-    printf '  update   Download and install the latest companion binary\\n'
+  version|--version|-v)
+    cmd_version
+    ;;
+  help|--help|-h|"")
+    printf '%sUsage:%s wendy <command>\\n\\n' "\$BOLD" "\$RESET"
+    printf '%sCommands:%s\\n' "\$BOLD" "\$RESET"
+    printf '  %sstart%s     Re-launch the companion (and Cloudflare tunnel if needed)\\n' "\$CYAN" "\$RESET"
+    printf '  %supdate%s    Check for and install the latest companion binary\\n' "\$CYAN" "\$RESET"
+    printf '  %sversion%s   Show the installed companion version\\n' "\$CYAN" "\$RESET"
+    printf '  %shelp%s      Show this help\\n' "\$CYAN" "\$RESET"
     exit 0
     ;;
   *)
-    printf 'Unknown command: %s\\n' "\${1}" >&2
-    printf 'Run \`wendy help\` for usage.\\n' >&2
+    printf '%sUnknown command:%s %s\\n' "\$RED" "\$RESET" "\${1}" >&2
+    printf 'Run %swendy help%s for usage.\\n' "\$BOLD" "\$RESET" >&2
     exit 1
     ;;
 esac
@@ -732,9 +892,19 @@ RUNSH
     ok "PATH already configured in $rc_file"
   fi
 
-  # ── Start companion ───────────────────────────────────────────────────────
-  printf '\n%sStarting companion…%s\n' "$C_BOLD" "$C_RESET"
-  printf '%sCtrl+C to stop.%s\n\n' "$C_DIM" "$C_RESET"
+  # Inline export so \`wendy\` is callable for the rest of this subshell
+  # (curl | bash runs in a sub-shell that won't see the rc-file change).
+  export PATH="$HOME/.whiteboard-agent:$PATH"
+
+  # ── Completion message ───────────────────────────────────────────────────
+  printf '\n%s%sInstallation complete!%s\n\n' "$C_GREEN" "$C_BOLD" "$C_RESET"
+  printf '  %swendy%s has been installed to %s~/.whiteboard-agent/wendy%s\n' \
+    "$C_BOLD" "$C_RESET" "$C_BLUE" "$C_RESET"
+  printf '  PATH has been added to %s%s%s\n\n' "$C_BLUE" "$rc_file" "$C_RESET"
+  printf '  %sRestart your terminal%s or run:\n' "$C_BOLD" "$C_RESET"
+  printf '    %sexport PATH="$HOME/.whiteboard-agent:$PATH"%s\n\n' "$C_BLUE" "$C_RESET"
+  printf '  Then start the companion:\n'
+  printf '    %swendy start%s\n\n' "$C_BLUE" "$C_RESET"
 
   printf '%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_BOLD" "$C_RESET"
   printf '%s▸ Public URL%s       : %s\n' "$C_BOLD" "$C_RESET" "$companion_url"
@@ -744,7 +914,8 @@ RUNSH
   printf '%s▸ Wendy CLI%s        : wendy start  (or: %s)\n' "$C_BOLD" "$C_RESET" "$run_script_path"
   printf '%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$C_BOLD" "$C_RESET"
 
-  printf '%sTo activate now: source %s%s\n\n' "$C_DIM" "$rc_file" "$C_RESET"
+  printf '%sStarting companion now…%s\n' "$C_BOLD" "$C_RESET"
+  printf '%sCtrl+C to stop.%s\n\n' "$C_DIM" "$C_RESET"
 
   printf '%sWendy: "All set — happy brainstorming!"%s\n\n' "$C_YELLOW" "$C_RESET"
 

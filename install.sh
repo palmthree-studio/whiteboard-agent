@@ -534,6 +534,18 @@ cmd_start() {
     exec < /dev/tty
   fi
 
+  # First-run: prompt for agent name if config.json doesn't exist
+  CONFIG_FILE="\$HOME/.whiteboard-agent/config.json"
+  if [ ! -f "\$CONFIG_FILE" ]; then
+    printf "What's your agent's name? (default: agent) "
+    read -r agent_name < /dev/tty
+    agent_name="\${agent_name:-agent}"
+    printf '{"version":1,"agentName":"%s","createdAt":"%s"}\\n' \\
+      "\$agent_name" \\
+      "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "\$CONFIG_FILE"
+    printf 'Agent name saved: %s\\n' "\$agent_name"
+  fi
+
   printf 'Launching temporary Cloudflare tunnel on http://localhost:3001…\\n'
   if ! start_temporary_tunnel; then
     printf 'Could not capture a trycloudflare.com URL within 30s.\\n' >&2
@@ -550,7 +562,7 @@ cmd_start() {
   printf '\\n'
   printf 'Note: this URL changes on every restart.\\n\\n'
 
-  exec env COMPANION_URL="\$URL" COMPANION_USERNAME="\$USERNAME" COMPANION_PASSWORD_HASH="\$PASSWORD_HASH" "\$BINARY"
+  exec env COMPANION_URL="\$URL" COMPANION_USERNAME="\$USERNAME" COMPANION_PASSWORD_HASH="\$PASSWORD_HASH" COMPANION_CONFIG_PATH="\$HOME/.whiteboard-agent/config.json" "\$BINARY"
 }
 
 case "\${1:-}" in
@@ -647,10 +659,29 @@ update_companion() {
 }
 
 cmd_start() {
+  # Some launch contexts (double-click, launchers) don't attach a tty to stdin.
+  # Re-attach so first-run prompts work correctly.
+  if [[ ! -t 0 ]]; then
+    exec < /dev/tty
+  fi
+
+  # First-run: prompt for agent name if config.json doesn't exist
+  CONFIG_FILE="\$HOME/.whiteboard-agent/config.json"
+  if [ ! -f "\$CONFIG_FILE" ]; then
+    printf "What's your agent's name? (default: agent) "
+    read -r agent_name < /dev/tty
+    agent_name="\${agent_name:-agent}"
+    printf '{"version":1,"agentName":"%s","createdAt":"%s"}\\n' \\
+      "\$agent_name" \\
+      "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "\$CONFIG_FILE"
+    printf 'Agent name saved: %s\\n' "\$agent_name"
+  fi
+
   exec env \\
     COMPANION_URL="\$COMPANION_URL_VALUE" \\
     COMPANION_USERNAME="\$USERNAME" \\
     COMPANION_PASSWORD_HASH="\$PASSWORD_HASH" \\
+    COMPANION_CONFIG_PATH="\$HOME/.whiteboard-agent/config.json" \\
     "\$BINARY"
 }
 
@@ -717,9 +748,23 @@ RUNSH
 
   printf '%sWendy: "All set — happy brainstorming!"%s\n\n' "$C_YELLOW" "$C_RESET"
 
+  # First-run: prompt for agent name if config.json doesn't exist
+  local config_file="$install_dir/config.json"
+  if [ ! -f "$config_file" ]; then
+    printf "%sWhat's your agent's name?%s (default: agent) " "$C_BOLD" "$C_RESET"
+    local agent_name
+    read -r agent_name
+    agent_name="${agent_name:-agent}"
+    printf '{"version":1,"agentName":"%s","createdAt":"%s"}\n' \
+      "$agent_name" \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$config_file"
+    ok "Agent name saved: $agent_name"
+  fi
+
   COMPANION_URL="$companion_url" \
   COMPANION_USERNAME="$username" \
   COMPANION_PASSWORD_HASH="$password_hash" \
+  COMPANION_CONFIG_PATH="$config_file" \
   exec "$binary_path"
 }
 

@@ -39,3 +39,9 @@ pm2 startup
 
 - `PORT` : port d'écoute (défaut : 3001)
 - `BOARDS_DIR` : dossier de stockage des boards (défaut : ~/.whiteboard/boards/)
+
+## Agent tokens
+
+To let multiple AI agents connect to the same companion, create a named token for each one from the **Agents** panel (gear icon) in the app.
+
+See [Agent Tokens — Multi-agent Collaboration](./agents.md) for the full setup guide.

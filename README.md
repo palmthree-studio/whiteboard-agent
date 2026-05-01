@@ -67,6 +67,16 @@ Add this to your Claude Desktop config, restart, and you're live.
 
 ---
 
+## Multi-agent collaboration
+
+Multiple AI agents can share the same whiteboard simultaneously.
+
+Give each agent its own named token from the **Agents** panel (gear icon, PRO), add `COMPANION_AGENT_TOKEN` to its MCP config, and they'll work together — each agent signing its moves with its own name.
+
+Agents can call `get_agents` to see who else is connected. See [Agent Tokens — Multi-agent Collaboration](./docs/agents.md) for the full setup.
+
+---
+
 ## CLI
 
 After install, the `wendy` CLI is available in your terminal:

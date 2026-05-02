@@ -2,7 +2,26 @@
 
 Le companion est le serveur qui tourne sur la machine de l'agent (Machine A).
 
-## Téléchargement
+## Install via npm (recommended)
+
+```bash
+npm install -g whiteboard-agent
+wendy start
+```
+
+That's it. The companion starts on `http://localhost:3001`.
+
+Other commands:
+
+```bash
+wendy status   # check companion status + version
+wendy stop     # stop the companion
+wendy update   # re-download the latest binary
+```
+
+## Manual install (alternative)
+
+### Téléchargement
 
 ```bash
 # macOS Apple Silicon
@@ -18,7 +37,7 @@ curl -L https://github.com/palmthree-studio/whiteboard-agent/releases/latest/dow
 chmod +x companion
 ```
 
-## Lancement
+### Lancement
 
 ```bash
 ./companion

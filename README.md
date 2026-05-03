@@ -40,11 +40,14 @@ You stay in control. You can edit, delete, or redirect at any point.
 
 ---
 
-## One purchase. Yours forever.
+## Free to use. Upgrade to PRO for €29.
 
-**€29** — no subscription, no cloud, no account.
+The app and the MCP connector are **free**. You only pay if you want PRO:
 
-The app runs entirely on your machine. Your boards stay on your machine. Nothing leaves unless you export it.
+- **Permanent URL** via Cloudflare Tunnel — your companion always reachable at the same domain.
+- **Offline mode** — keep working without an internet connection.
+
+One-time purchase. No subscription, no cloud, no account. The app runs entirely on your machine. Your boards stay on your machine. Nothing leaves unless you export it.
 
 ---
 
@@ -82,8 +85,13 @@ Agents can call `get_agents` to see who else is connected. See [Agent Tokens —
 After install, the `wendy` CLI is available in your terminal:
 
 ```bash
-wendy start    # Re-launch the companion (and Cloudflare tunnel if needed)
-wendy update   # Download and install the latest companion binary
+wendy start                                          # Re-launch the companion (and Cloudflare tunnel if needed)
+wendy stop                                           # Stop the companion
+wendy status                                         # Show companion status and URL
+wendy update                                         # Download and install the latest companion binary
+wendy activate <license-key>                         # Activate a PRO licence on this machine
+wendy deactivate                                     # Deactivate the PRO licence on this machine
+wendy configure-tunnel --token <token> --url <url>   # Configure a permanent Cloudflare tunnel (PRO)
 ```
 
 ---

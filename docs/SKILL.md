@@ -85,56 +85,45 @@ Returns `{ "success": true }`.
 
 ## Liens directs vers un board
 
-Quand tu crées ou modifies un board, envoie systématiquement deux liens :
+Whiteboard est désormais une app web (le build Tauri a été retiré). Il n'y a plus de deep link `whiteboard://` — tous les boards s'ouvrent par URL HTTP.
+
+Quand tu crées ou modifies un board, envoie un seul lien — l'URL publique du companion suivie du nom du board :
 
 ```
 Board prêt : mon-board
 
-→ Desktop : whiteboard://board/mon-board
-→ Mobile  : https://[tunnel-url]/view/mon-board
+→ https://[companion-url]/view/mon-board
 ```
 
-**Règle** : toujours envoyer les deux liens en même temps.
-Le lien desktop ouvre directement l'app sur le bon board.
-Le lien mobile ouvre la vue browser read-only (commentaires inclus).
+`[companion-url]` est l'URL publique exposée par le companion (cf. section installation ci-dessous). Le nom du board est le même que celui utilisé dans `save_board` et `load_board`.
 
-Le nom du board est le même que celui utilisé dans `save_board` et `load_board`.
+Pour récupérer cette URL côté agent : appeler `get_setup_info` sur le MCP — la réponse contient l'URL publique du companion.
 
 ## Installation du companion sur Machine A
 
-Quand un utilisateur te demande de configurer son serveur, exécute ces étapes sur ta machine (Machine A) :
+Quand un utilisateur te demande de configurer son serveur, exécute ces étapes sur sa machine (Machine A) :
 
-### 1. Télécharger et lancer le companion
+### 1. Installer et lancer le companion
 
 ```bash
-# Détecte l'architecture et télécharge le bon binaire
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-  BINARY="companion-macos-arm64"
-elif [ "$(uname)" = "Linux" ]; then
-  BINARY="companion-linux-x64"
-else
-  BINARY="companion-macos-x64"
-fi
-curl -L "https://github.com/palmthree-studio/whiteboard/releases/latest/download/$BINARY" -o companion
-chmod +x companion
-./companion &
+npm install -g whiteboard-agent
+wendy start
 ```
 
-### 2. Configurer le tunnel permanent
+Le companion démarre sur `http://localhost:3001`. `wendy status` affiche l'URL en cours.
 
-Option A — Tailscale Funnel :
+### 2. (Optionnel — PRO) Configurer une URL permanente
+
+Pour exposer le companion derrière une URL stable, l'utilisateur doit avoir une licence PRO et un tunnel Cloudflare créé dans son dashboard (cf. `docs/cloudflare-tunnel.md`). Une fois le token récupéré :
+
 ```bash
-tailscale funnel 3001
+wendy activate <license-key>
+wendy configure-tunnel --token <token> --url whiteboard.yourdomain.com
 ```
-L'URL publique est affichée dans le terminal.
 
-Option B — Cloudflare Tunnel :
-```bash
-cloudflared tunnel --url http://localhost:3001 run whiteboard
-```
+Le companion est alors atteignable depuis n'importe où via `https://whiteboard.yourdomain.com`.
 
 ### 3. Donner l'URL à l'utilisateur
 
-Envoie l'URL publique (ex: https://machine-a.taild12ab.ts.net) à l'utilisateur.
+Envoie l'URL publique (locale `http://localhost:3001` ou la version tunnelée) à l'utilisateur.
 Il l'entre dans l'onboarding de son app Whiteboard.

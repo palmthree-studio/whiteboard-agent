@@ -34,7 +34,7 @@ Token management lives behind a human-only UI — a compromised agent must not b
 
 If you forget the token, you cannot recover it. Revoke the agent in the panel and create a new one.
 
-> **PRO required.** Token creation is gated by an active PRO licence on the companion. The list and revoke actions are not gated, so you can always inspect and clean up existing tokens.
+> **PRO required.** Creating named agent tokens is part of the PRO multi-agent feature set. The list and revoke actions are not gated, so you can always inspect and clean up existing tokens.
 
 ---
 
@@ -81,13 +81,13 @@ When the companion runs on `127.0.0.1` and `COMPANION_LOCALHOST_BYPASS=1` is set
 }
 ```
 
-As soon as the companion is exposed publicly (Cloudflare Tunnel, Tailscale Funnel, reverse proxy), the bypass no longer applies and `COMPANION_AGENT_TOKEN` becomes mandatory for any write tool.
+As soon as the companion is exposed publicly (Cloudflare Tunnel, Tailscale Funnel, reverse proxy), the bypass no longer applies and `COMPANION_AGENT_TOKEN` becomes mandatory for every authenticated request.
 
 ---
 
 ## What agents can do
 
-Once authenticated, an agent has access to the full MCP toolset. Read tools work without a PRO licence; write tools require one.
+Once authenticated, an agent has access to the full MCP toolset. Almost every tool — read or write — is free; PRO unlocks the multi-agent token panel and offline mode.
 
 | Tool | Kind | PRO |
 |---|---|---|
@@ -95,18 +95,21 @@ Once authenticated, an agent has access to the full MCP toolset. Read tools work
 | `get_boards_list` | read | no |
 | `get_comments` | read | no |
 | `get_unread_comments` | read | no |
-| `get_agents` | read | no |
-| `add_ticket` | write | yes |
-| `update_ticket` | write | yes |
-| `remove_ticket` | write | yes |
-| `add_connector` | write | yes |
-| `remove_connector` | write | yes |
-| `add_comment` | write | yes |
-| `delete_comment` | write | yes |
-| `import_board` | write | yes |
-| `clear_board` | write | yes |
-| `save_board` | write | yes |
-| `load_board` | write | yes |
+| `get_setup_info` | read | no |
+| `get_agents` | read | yes |
+| `add_ticket` | write | no |
+| `update_ticket` | write | no |
+| `remove_ticket` | write | no |
+| `add_connector` | write | no |
+| `remove_connector` | write | no |
+| `add_comment` | write | no |
+| `delete_comment` | write | no |
+| `import_board` | write | no |
+| `clear_board` | write | no |
+| `save_board` | write | no |
+| `load_board` | write | no |
+
+Only `get_agents` is PRO-gated, because the multi-agent token panel that populates it is itself a PRO feature. Offline mode is also PRO-only, but it is not exposed as an MCP tool — it is a runtime flag of the companion.
 
 Every write is stamped with the agent's `COMPANION_AGENT_NAME` so the board history shows which agent made which change.
 
@@ -141,7 +144,7 @@ Token hashes are never included. An agent can use this to:
 - See which colleagues exist on the board.
 - Decide who to address in a comment (`@Carmack, please review …`).
 
-`get_agents` does not require a PRO licence — knowing your collaborators is workspace state, not a paid feature.
+`get_agents` requires a PRO licence — it is the read-side of the multi-agent token panel, which is itself a PRO feature.
 
 ---
 
@@ -185,14 +188,17 @@ There is no recovery path — only the SHA-256 is stored. Open the panel, revoke
 **`401 invalid_agent_token`.**
 The token doesn't match any agent on disk. Common causes: the agent was revoked, the token was truncated when copied, or the companion's `~/.whiteboard-agent/agents.json` was wiped. Generate a new one from the panel.
 
-**`403 license_required` on a write tool.**
-Write tools (`add_ticket`, `save_board`, …) require an active PRO licence on the companion. Activate from the licence panel, then retry.
+**`401 missing_agent_token`.**
+The companion is reachable from a non-loopback address (or `COMPANION_LOCALHOST_BYPASS` is unset) and the request arrived without an `Authorization: Bearer` header. Add `COMPANION_AGENT_TOKEN` to your MCP config.
 
 **`403 forbidden_for_agent_token` when calling `/api/agents`.**
 You're calling a human-only endpoint with a Bearer token. Use the `get_agents` MCP tool from the agent side, or open the panel from a browser session.
 
+**`get_agents` returns a PRO error.**
+The multi-agent token panel is a PRO feature; without an active licence the companion will not list agents over MCP. Activate from the licence panel, then retry.
+
 **Companion unreachable.**
-Verify `COMPANION_URL` resolves and the companion is running. From the agent's machine: `curl -i $COMPANION_URL/api/license/status` should return JSON. If you're tunnelling through Cloudflare or Tailscale, make sure that route is up — see [cloudflare-tunnel.md](./cloudflare-tunnel.md).
+Verify `COMPANION_URL` resolves and the companion is running. From the agent's machine: `curl -i $COMPANION_URL/api/setup-info` should return JSON. If you're tunnelling through Cloudflare or Tailscale, make sure that route is up — see [cloudflare-tunnel.md](./cloudflare-tunnel.md).
 
 **Multiple agents stomping on each other.**
 Each write goes through the same store, last-write-wins. The board UI animates each change, so users notice when two agents edit the same ticket. Use comments (`add_comment`) to coordinate, and `get_agents` to know who else is connected.

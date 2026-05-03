@@ -14,9 +14,12 @@ That's it. The companion starts on `http://localhost:3001`.
 Other commands:
 
 ```bash
-wendy status   # check companion status + version
-wendy stop     # stop the companion
-wendy update   # re-download the latest binary
+wendy status                                         # check companion status + version
+wendy stop                                           # stop the companion
+wendy update                                         # re-download the latest binary
+wendy activate <license-key>                         # activate a PRO licence on this machine
+wendy deactivate                                     # deactivate the PRO licence on this machine
+wendy configure-tunnel --token <token> --url <url>   # configure a permanent Cloudflare tunnel (PRO)
 ```
 
 ## Manual install (alternative)

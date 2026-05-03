@@ -1,59 +1,24 @@
 # Whiteboard
 
-### The whiteboard where you and your AI think together.
+### Your Agent Just Got Eyes & Hands.
 
-You describe the idea. The AI builds the diagram — live, in front of you, ticket by ticket.
+Give your AI agents a shared canvas. They read it, write it, build on it — alongside you.
 
 ---
 
-## What it looks like
+Whiteboard is a local-first canvas your agents can actually *use*. Not screenshots, not descriptions — a real surface where they create tickets, draw connectors, rearrange the layout, and leave their marks. You watch every move land in real time. You take over whenever you want.
 
-You open the app. The canvas is empty.
+The app is free. Forever. Yours forever.
 
-You ask Claude:
+---
+
+## Quick start
+
+Tell your agent:
+
 > *"Map out the architecture of a SaaS app with auth, API, database and CDN."*
 
-You watch tickets appear one by one, connectors draw themselves, the layout snaps into place. In ten seconds you have a diagram that would've taken you twenty minutes.
-
-Then you take over. Move things around. Add context. Change colors. The AI waits for your next instruction.
-
-**That's the loop. Human intuition + AI speed.**
-
----
-
-## What you can build
-
-- **System design diagrams** — architecture reviews, technical onboarding, API docs
-- **Mind maps** — brainstorm a product, explore a concept, prepare a talk
-- **Flowcharts** — user journeys, CI/CD pipelines, decision trees
-- **Project roadmaps** — quarters, features, dependencies, all connected
-
----
-
-## How it works
-
-Whiteboard connects to any MCP-compatible AI agent — Claude, Cursor, and more.
-
-The AI gets a set of tools: create tickets, draw connectors, apply layouts, rearrange the board. It uses them the same way you'd use a mouse. You see every move in real time, with a smooth animation for each new element.
-
-You stay in control. You can edit, delete, or redirect at any point.
-
----
-
-## Free to use. Upgrade to PRO for €29.
-
-The app and the MCP connector are **free**. You only pay if you want PRO:
-
-- **Permanent URL** via Cloudflare Tunnel — your companion always reachable at the same domain.
-- **Offline mode** — keep working without an internet connection.
-
-One-time purchase. No subscription, no cloud, no account. The app runs entirely on your machine. Your boards stay on your machine. Nothing leaves unless you export it.
-
----
-
-## Install the AI connector
-
-To let your AI agent drive the whiteboard, install the free MCP connector:
+Then give it the canvas. Drop this into your MCP client config:
 
 ```json
 {
@@ -66,33 +31,54 @@ To let your AI agent drive the whiteboard, install the free MCP connector:
 }
 ```
 
-Add this to your Claude Desktop config, restart, and you're live.
+Restart your client. The board is live.
 
 ---
 
-## Multi-agent collaboration
+**17 MCP tools.** All free.
 
-Multiple AI agents can share the same whiteboard simultaneously.
-
-Give each agent its own named token from the **Agents** panel (gear icon, PRO), add `COMPANION_AGENT_TOKEN` to its MCP config, and they'll work together — each agent signing its moves with its own name.
-
-Agents can call `get_agents` to see who else is connected. See [Agent Tokens — Multi-agent Collaboration](./docs/agents.md) for the full setup.
+**Compatible clients** — Claude · Cursor · Windsurf · OpenAI Codex · Cline · Openclaw · Hermes
 
 ---
 
 ## CLI
 
-After install, the `wendy` CLI is available in your terminal:
+After install, `wendy` lives in your terminal:
 
-```bash
-wendy start                                          # Re-launch the companion (and Cloudflare tunnel if needed)
-wendy stop                                           # Stop the companion
-wendy status                                         # Show companion status and URL
-wendy update                                         # Download and install the latest companion binary
-wendy activate <license-key>                         # Activate a PRO licence on this machine
-wendy deactivate                                     # Deactivate the PRO licence on this machine
-wendy configure-tunnel --token <token> --url <url>   # Configure a permanent Cloudflare tunnel (PRO)
-```
+| Command | What it does |
+|---|---|
+| `wendy start` | Re-launch the companion (and Cloudflare tunnel if needed) |
+| `wendy stop` | Stop the companion |
+| `wendy status` | Show companion status and URL |
+| `wendy update` | Pull the latest companion binary |
+| `wendy activate <license-key>` | Activate PRO on this machine |
+| `wendy deactivate` | Deactivate PRO on this machine |
+| `wendy configure-tunnel --token <token> --url <url>` | Configure a permanent Cloudflare tunnel (PRO) |
+
+---
+
+## PRO — €29 one-time
+
+The app is free. PRO unlocks two things:
+
+- **Custom Public URL** — your companion always reachable at the same domain, via Cloudflare Tunnel.
+- **Offline Mode** — keep the loop going without an internet connection.
+
+€29 one-time for early adopters. €49 after. **Buy once, own it forever.**
+
+---
+
+## Multi-agent
+
+Drop several agents on the same board. Each gets its own named token from the **Agents** panel and signs every action it takes — so you always know who moved what.
+
+Agents can call `get_agents` to see who else is on the canvas. Setup details: [Agent Tokens — Multi-agent Collaboration](./docs/agents.md).
+
+---
+
+## Local-first
+
+Your boards live on your machine. No cloud, no account, no telemetry. **Your computer is your server.** Nothing leaves unless you export it.
 
 ---
 

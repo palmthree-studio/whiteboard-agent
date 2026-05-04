@@ -1,0 +1,39 @@
+{
+  "name": "whiteboard-agent",
+  "version": "1.4.0",
+  "description": "Wendy — the companion CLI for Whiteboard. Install once, draw with AI forever.",
+  "keywords": [
+    "whiteboard",
+    "mcp",
+    "ai",
+    "claude",
+    "diagram",
+    "companion"
+  ],
+  "homepage": "https://github.com/palmthree-studio/whiteboard",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/palmthree-studio/whiteboard.git"
+  },
+  "license": "MIT",
+  "author": "Palmthree Studio",
+  "type": "commonjs",
+  "bin": {
+    "wendy": "./bin/cli.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "lib/cloudflared.js",
+    "scripts/postinstall.js",
+    "README.md"
+  ],
+  "dependencies": {
+    "cloudflared": "^0.7.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

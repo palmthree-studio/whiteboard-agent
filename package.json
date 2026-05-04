@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-agent",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Wendy — the companion CLI for Whiteboard. Install once, draw with AI forever.",
   "keywords": [
     "whiteboard",
@@ -10,10 +10,10 @@
     "diagram",
     "companion"
   ],
-  "homepage": "https://github.com/palmthree-studio/whiteboard",
+  "homepage": "https://github.com/palmthree-studio/whiteboard-agent",
   "repository": {
     "type": "git",
-    "url": "https://github.com/palmthree-studio/whiteboard.git"
+    "url": "https://github.com/palmthree-studio/whiteboard-agent.git"
   },
   "license": "MIT",
   "author": "Palmthree Studio",

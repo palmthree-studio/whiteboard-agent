@@ -12,17 +12,20 @@
  *    we exit 0. The CLI degrades gracefully if the companion is missing
  *    (it just prints a hint and lets the user run `wendy update`).
  *
- * After download, we also auto-start the companion. When the install runs in
- * non-interactive mode (`!process.stdin.isTTY` — typical of an agent running
- * `npm install whiteboard-agent` on the user's behalf) we additionally
- * generate a default username/password pair and persist them to
- * `~/.whiteboard-agent/config.json` so the agent can later expose them via
- * the `get_setup_info` MCP tool. Interactive (human) installs leave the
- * existing onboarding flow untouched.
+ * After download, we also auto-start the companion + tunnel by spawning
+ * `wendy start` as a detached background process. This is the correct
+ * architecture: `wendy start` is designed as a long-running daemon that owns
+ * the tunnel lifecycle (it blocks on `waitForProcess` so the cloudflared pipe
+ * never closes). Spawning cloudflared directly from postinstall caused it to
+ * die the moment postinstall called `process.exit(0)` (SIGPIPE on closed pipe).
  *
- * Tunnel mode: we always start a quick tunnel here. Permanent (named) tunnels
- * are configured later by the user via `wendy configure-tunnel`, and only
- * activated on subsequent `wendy start`s — never on first install.
+ * For agent-mode installs (!process.stdin.isTTY) we additionally generate a
+ * default username/password pair and persist them to config.json so the agent
+ * can read them via the `get_setup_info` MCP tool. Interactive (human) installs
+ * leave the existing onboarding flow untouched.
+ *
+ * Permanent (named) tunnels are configured later by the user via
+ * `wendy configure-tunnel` — never provisioned at install time.
  */
 'use strict';
 
@@ -33,13 +36,12 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const cloudflared = require('../lib/cloudflared');
-
 const RELEASE_BASE =
   'https://github.com/palmthree-studio/whiteboard-agent/releases/download/nightly';
 
-const COMPANION_LOCAL_URL = 'http://localhost:3001';
-const TUNNEL_TIMEOUT_MS = 20000;
+// How long to wait (ms) for `wendy start` to get a public URL.
+// Budget: ~5s companion startup + ~20s cloudflared announcement + margin.
+const WENDY_START_TIMEOUT_MS = 35000;
 
 function artifactName() {
   const platform = process.platform;
@@ -149,6 +151,19 @@ function readConfig(configPath) {
 }
 
 /**
+ * Persist `config` to `configPath` with mode 0600.
+ */
+function writeConfig(configPath, config) {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+  } catch (err) {
+    process.stderr.write(
+      '[whiteboard-agent] failed to write ' + configPath + ': ' + String(err) + '\n',
+    );
+  }
+}
+
+/**
  * If we're in agentique mode (no TTY) and credentials aren't already set,
  * generate a username/password pair and persist them to `config.json` with
  * mode 0o600 so the agent (and only the agent) can read them later.
@@ -168,102 +183,38 @@ function ensureAgentCredentials(configPath) {
   config.passwordHash = sha256(config.password);
   config.setupMode = 'agent';
   config.passwordChanged = false;
-  try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
-  } catch (err) {
-    process.stderr.write(
-      '[whiteboard-agent] failed to write ' + configPath + ': ' + String(err) + '\n',
-    );
-  }
+  writeConfig(configPath, config);
   return config;
 }
 
 /**
- * Persist the (possibly updated) config back to disk with mode 0600.
- */
-function writeConfig(configPath, config) {
-  try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
-  } catch (err) {
-    process.stderr.write(
-      '[whiteboard-agent] failed to write ' + configPath + ': ' + String(err) + '\n',
-    );
-  }
-}
-
-/**
- * Start a Cloudflare quick tunnel pointing at the companion. Listens to
- * stdout/stderr for the public `*.trycloudflare.com` URL, writes it to
- * `config.publicUrl`, then `unref()`s the child so `npm install` can return
- * even though the tunnel keeps running. Resolves with the URL (or null on
- * timeout / failure). Never throws.
+ * Poll `configPath` every 500 ms until `publicUrl` appears in the JSON or
+ * `maxWaitMs` elapses. Resolves with the URL string, or `null` on timeout.
  *
- * Permanent tunnels are not provisioned at install time — they require a
- * licensed user to run `wendy configure-tunnel` after the fact.
+ * `wendy start` writes `publicUrl` to config.json as soon as cloudflared
+ * announces the tunnel — we rely on that contract here.
  */
-function startTunnel(targetUrl, tunnelPidPath) {
-  return cloudflared
-    .startQuickTunnel(targetUrl, { timeoutMs: TUNNEL_TIMEOUT_MS })
-    .then(function (result) {
-      if (result.process && typeof result.process.pid === 'number') {
-        try {
-          fs.writeFileSync(tunnelPidPath, String(result.process.pid), 'utf8');
-        } catch (_) {
-          /* ignore */
-        }
-      }
-      if (!result.url) {
-        process.stderr.write(
-          '[whiteboard-agent] cloudflared did not produce a public URL within ' +
-            TUNNEL_TIMEOUT_MS / 1000 +
-            's — continuing without tunnel.\n',
-        );
-      }
-      return result.url;
-    })
-    .catch(function (err) {
-      process.stderr.write(
-        '[whiteboard-agent] failed to spawn cloudflared: ' + String(err) + '\n',
-      );
-      return null;
-    });
-}
-
-/**
- * Spawn the companion in the background (fire-and-forget). Forwards
- * COMPANION_USERNAME / COMPANION_PASSWORD_HASH from the config when present
- * so that the companion boots already authenticated. Writes the PID to
- * `companion.pid`. Never throws.
- */
-function spawnCompanion(companionPath, config, pidPath) {
-  if (!fs.existsSync(companionPath)) return;
-  const env = Object.assign({}, process.env);
-  if (config && config.username) env['COMPANION_USERNAME'] = config.username;
-  if (config && config.passwordHash) {
-    env['COMPANION_PASSWORD_HASH'] = config.passwordHash;
-  }
-  try {
-    const child = spawn(companionPath, [], {
-      detached: true,
-      stdio: 'ignore',
-      env: env,
-    });
-    if (typeof child.pid === 'number') {
+function pollForPublicUrl(configPath, maxWaitMs) {
+  return new Promise(function (resolve) {
+    const deadline = Date.now() + maxWaitMs;
+    function tick() {
       try {
-        fs.writeFileSync(pidPath, String(child.pid));
+        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (typeof cfg.publicUrl === 'string' && cfg.publicUrl.length > 0) {
+          resolve(cfg.publicUrl);
+          return;
+        }
       } catch (_) {
-        /* ignore PID file errors */
+        /* config not yet written — keep polling */
       }
-      process.stderr.write(
-        '[whiteboard-agent] companion started (pid ' + child.pid + ')\n',
-      );
+      if (Date.now() >= deadline) {
+        resolve(null);
+        return;
+      }
+      setTimeout(tick, 500);
     }
-    child.unref();
-  } catch (err) {
-    process.stderr.write(
-      '[whiteboard-agent] failed to spawn companion: ' + String(err) + '\n',
-    );
-  }
+    tick();
+  });
 }
 
 (function main() {
@@ -292,47 +243,76 @@ function spawnCompanion(companionPath, config, pidPath) {
   }
 
   const configPath = path.join(target.dir, 'config.json');
-  const pidPath = path.join(target.dir, 'companion.pid');
-  const tunnelPidPath = path.join(target.dir, 'tunnel.pid');
 
   function finalize() {
-    const config = ensureAgentCredentials(configPath);
-    spawnCompanion(target.file, config, pidPath);
-    // Only spin up a Cloudflare tunnel for agentique installs — interactive
-    // installs (TTY) keep the existing behaviour, the user runs `wendy start`
-    // when they're ready. We block npm install for up to ~20s while the
-    // tunnel announces its URL; this is acceptable for agent-driven installs
-    // where the agent needs the public URL immediately via get_setup_info.
+    // Ensure credentials exist for agentique installs.
+    ensureAgentCredentials(configPath);
+
     if (!process.stdin.isTTY) {
+      // Agent install: delegate companion + tunnel lifecycle to `wendy start`.
+      //
+      // Why not spawn companion + cloudflared directly here?
+      // Because startQuickTunnel (lib/cloudflared.js) spawns cloudflared with
+      // stdio pipes open on the parent. When postinstall exits, the pipe
+      // read-end closes → SIGPIPE → cloudflared dies immediately.
+      //
+      // `wendy start` is designed to be a long-running daemon. It stays alive
+      // via waitForProcess(cloudflaredProcess), keeping the pipe open and the
+      // tunnel alive indefinitely.
+      //
+      // We spawn `wendy start` detached + stdio:ignore so it survives after
+      // npm install completes, then we poll config.json for publicUrl (which
+      // wendy start writes as soon as the tunnel URL is known).
+
+      // Clear any stale publicUrl so pollForPublicUrl doesn't return an old value.
+      const cfg = readConfig(configPath);
+      if (cfg.publicUrl) {
+        delete cfg.publicUrl;
+        writeConfig(configPath, cfg);
+      }
+
+      const wendyCli = path.join(__dirname, '..', 'bin', 'cli.js');
       process.stdout.write(
-        '[whiteboard-agent] starting Cloudflare tunnel, this may take ~10s...\n',
+        '[whiteboard-agent] starting companion and tunnel via wendy start...\n',
       );
-      startTunnel(COMPANION_LOCAL_URL, tunnelPidPath)
-        .then(function (publicUrl) {
-          if (publicUrl) {
-            const cfg = readConfig(configPath);
-            cfg.publicUrl = publicUrl;
-            writeConfig(configPath, cfg);
-            process.stdout.write(
-              '[whiteboard-agent] public URL: ' + publicUrl + '\n',
-            );
-          } else {
-            process.stderr.write(
-              '[whiteboard-agent] tunnel unavailable — companion is reachable only on ' +
-                COMPANION_LOCAL_URL +
-                '.\n',
-            );
-          }
-          process.exit(0);
-        })
-        .catch(function (err) {
-          process.stderr.write(
-            '[whiteboard-agent] tunnel error: ' + String(err) + '\n',
-          );
-          process.exit(0);
+
+      let wendyChild;
+      try {
+        wendyChild = spawn(process.execPath, [wendyCli, 'start'], {
+          detached: true,
+          stdio: 'ignore',
         });
+        wendyChild.unref();
+      } catch (err) {
+        process.stderr.write(
+          '[whiteboard-agent] failed to spawn wendy start: ' + String(err) + '\n',
+        );
+        process.exit(0);
+        return;
+      }
+
+      process.stdout.write(
+        '[whiteboard-agent] waiting for tunnel (up to ' +
+          WENDY_START_TIMEOUT_MS / 1000 +
+          's)...\n',
+      );
+
+      pollForPublicUrl(configPath, WENDY_START_TIMEOUT_MS).then(function (publicUrl) {
+        if (publicUrl) {
+          process.stdout.write('[whiteboard-agent] public URL: ' + publicUrl + '\n');
+        } else {
+          process.stderr.write(
+            '[whiteboard-agent] tunnel did not come up within ' +
+              WENDY_START_TIMEOUT_MS / 1000 +
+              's — run `wendy status` to check.\n',
+          );
+        }
+        process.exit(0);
+      });
       return;
     }
+
+    // Interactive (human) install — just exit; user runs `wendy start` manually.
     process.exit(0);
   }
 
@@ -365,7 +345,7 @@ function spawnCompanion(companionPath, config, pidPath) {
           ') — run `wendy update` later or download the binary manually.\n',
       );
       // Even if download failed, an existing binary may still be usable —
-      // try to start it. spawnCompanion is a no-op if the file is missing.
+      // finalize still sets up credentials and starts wendy start.
       finalize();
     });
 })();

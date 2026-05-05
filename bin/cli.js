@@ -32,7 +32,7 @@ const COMPANION_PORT = 3001;
 const COMPANION_URL = 'http://localhost:' + COMPANION_PORT;
 const HEALTH_PATH = '/health';
 const RELEASE_BASE =
-  'https://github.com/palmthree-studio/whiteboard/releases/latest/download';
+  'https://github.com/palmthree-studio/whiteboard-agent/releases/download/nightly';
 
 const AGENT_DIR = path.join(os.homedir(), '.whiteboard-agent');
 const PID_FILE = path.join(AGENT_DIR, 'companion.pid');

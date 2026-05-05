@@ -36,7 +36,7 @@ const { spawn } = require('child_process');
 const cloudflared = require('../lib/cloudflared');
 
 const RELEASE_BASE =
-  'https://github.com/palmthree-studio/whiteboard/releases/latest/download';
+  'https://github.com/palmthree-studio/whiteboard-agent/releases/download/nightly';
 
 const COMPANION_LOCAL_URL = 'http://localhost:3001';
 const TUNNEL_TIMEOUT_MS = 20000;

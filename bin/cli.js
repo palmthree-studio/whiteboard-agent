@@ -340,41 +340,6 @@ async function cmdStart() {
   const initial = await checkHealth();
   if (initial.ok) {
     process.stdout.write('Companion already running at ' + COMPANION_URL + '\n');
-    // Companion is running — check if a tunnel is already active.
-    const cfg = readConfig();
-    if (cfg.publicUrl) {
-      process.stdout.write('Public URL: ' + cfg.publicUrl + '\n');
-      return 0;
-    }
-    // Companion running but no tunnel active (e.g. stale process from a dev
-    // session). Start just the tunnel so the agent gets a shareable URL.
-    if (cfg.urlType === 'permanent' && cfg.tunnelToken) {
-      process.stdout.write('Starting Cloudflare named tunnel...\n');
-      const ok = await startNamedTunnel(cfg.tunnelToken);
-      if (ok && cfg.publicUrl) {
-        process.stdout.write('Public URL: ' + cfg.publicUrl + '\n');
-      } else if (!ok) {
-        process.stderr.write(
-          '[wendy] named tunnel unavailable — companion reachable only on ' +
-            COMPANION_URL +
-            '.\n',
-        );
-      }
-      return 0;
-    }
-    process.stdout.write('Starting Cloudflare tunnel, this may take ~10s...\n');
-    const publicUrl = await startQuickTunnel(COMPANION_URL);
-    if (publicUrl) {
-      cfg.publicUrl = publicUrl;
-      writeConfig(cfg);
-      process.stdout.write('Public URL: ' + publicUrl + '\n');
-    } else {
-      process.stderr.write(
-        '[wendy] tunnel unavailable — companion reachable only on ' +
-          COMPANION_URL +
-          '.\n',
-      );
-    }
     return 0;
   }
 

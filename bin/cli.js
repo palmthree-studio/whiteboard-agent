@@ -302,13 +302,23 @@ async function startQuickTunnel(targetUrl) {
           's — continuing without tunnel.\n',
       );
     }
-    return result.url;
+    return result;
   } catch (err) {
     process.stderr.write(
       '[wendy] failed to spawn cloudflared: ' + String(err) + '\n',
     );
-    return null;
+    return { process: null, url: null };
   }
+}
+
+/**
+ * Block until the given child process exits. Resolves with the exit code.
+ */
+function waitForProcess(child) {
+  return new Promise(function (resolve) {
+    child.on('exit', function (code) { resolve(code || 0); });
+    child.on('error', function () { resolve(1); });
+  });
 }
 
 /**
@@ -336,149 +346,116 @@ async function startNamedTunnel(token) {
 }
 
 // ── start ────────────────────────────────────────────────────────────────────
+// `wendy start` is a long-running process. It stays alive for the entire
+// tunnel lifetime — this is intentional (same model as Claude Code, OpenClaw,
+// etc.). The tunnel's cloudflared process is a foreground child of wendy, so:
+//   - pipes stay open → no SIGPIPE
+//   - Ctrl+C / wendy stop kills both tunnel and companion cleanly
 async function cmdStart() {
   const initial = await checkHealth();
-  if (initial.ok) {
-    process.stdout.write('Companion already running at ' + COMPANION_URL + '\n');
-    // Companion is running — check if a tunnel is already active.
-    const cfg = readConfig();
-    if (cfg.publicUrl) {
-      process.stdout.write('Public URL: ' + cfg.publicUrl + '\n');
-      return 0;
-    }
-    // Companion running but no tunnel active (e.g. stale process from a dev
-    // session). Start just the tunnel so the agent gets a shareable URL.
-    if (cfg.urlType === 'permanent' && cfg.tunnelToken) {
-      process.stdout.write('Starting Cloudflare named tunnel...\n');
-      const ok = await startNamedTunnel(cfg.tunnelToken);
-      if (ok && cfg.publicUrl) {
-        process.stdout.write('Public URL: ' + cfg.publicUrl + '\n');
-      } else if (!ok) {
-        process.stderr.write(
-          '[wendy] named tunnel unavailable — companion reachable only on ' +
-            COMPANION_URL +
-            '.\n',
-        );
-      }
-      return 0;
-    }
-    process.stdout.write('Starting Cloudflare tunnel, this may take ~10s...\n');
-    const publicUrl = await startQuickTunnel(COMPANION_URL);
-    if (publicUrl) {
-      cfg.publicUrl = publicUrl;
-      writeConfig(cfg);
-      process.stdout.write('Public URL: ' + publicUrl + '\n');
-    } else {
+  const companionAlreadyRunning = initial.ok;
+
+  if (!companionAlreadyRunning) {
+    const binary = companionBinaryPath();
+    if (!fs.existsSync(binary)) {
       process.stderr.write(
-        '[wendy] tunnel unavailable — companion reachable only on ' +
-          COMPANION_URL +
-          '.\n',
+        'Companion not installed. Run: npm i -g whiteboard-agent\n',
       );
+      return 1;
     }
-    return 0;
-  }
 
-  const binary = companionBinaryPath();
-  if (!fs.existsSync(binary)) {
-    process.stderr.write(
-      'Companion not installed. Run: npm i -g whiteboard-agent\n',
-    );
-    return 1;
-  }
-
-  // Load auth credentials persisted by the postinstall script (agentique
-  // installs auto-generate them) so that the companion boots with the same
-  // username/password the agent expects.
-  const savedConfig = readConfig();
-  const env = Object.assign({}, process.env);
-  if (savedConfig.username) env['COMPANION_USERNAME'] = savedConfig.username;
-  if (savedConfig.passwordHash) {
-    env['COMPANION_PASSWORD_HASH'] = savedConfig.passwordHash;
-  }
-
-  let child;
-  try {
-    child = spawn(binary, [], { detached: true, stdio: 'ignore', env: env });
-  } catch (err) {
-    process.stderr.write(
-      '[wendy] failed to spawn companion: ' + String(err) + '\n',
-    );
-    return 1;
-  }
-  if (typeof child.pid === 'number') {
-    writePidFile(child.pid);
-  }
-  child.unref();
-
-  // Poll /health for up to 5s (200ms interval).
-  const maxAttempts = 25;
-  let healthy = false;
-  for (let i = 0; i < maxAttempts; i++) {
-    await sleep(200);
-    const probe = await checkHealth();
-    if (probe.ok) {
-      healthy = true;
-      break;
+    const savedConfig = readConfig();
+    const env = Object.assign({}, process.env);
+    if (savedConfig.username) env['COMPANION_USERNAME'] = savedConfig.username;
+    if (savedConfig.passwordHash) {
+      env['COMPANION_PASSWORD_HASH'] = savedConfig.passwordHash;
     }
+
+    let companionChild;
+    try {
+      companionChild = spawn(binary, [], { detached: true, stdio: 'ignore', env: env });
+    } catch (err) {
+      process.stderr.write('[wendy] failed to spawn companion: ' + String(err) + '\n');
+      return 1;
+    }
+    if (typeof companionChild.pid === 'number') {
+      writePidFile(companionChild.pid);
+    }
+    companionChild.unref();
+
+    // Poll /health for up to 5s.
+    const maxAttempts = 25;
+    let healthy = false;
+    for (let i = 0; i < maxAttempts; i++) {
+      await sleep(200);
+      const probe = await checkHealth();
+      if (probe.ok) { healthy = true; break; }
+    }
+
+    if (!healthy) {
+      process.stderr.write(
+        '[wendy] companion did not become ready within 5s — check ' + AGENT_DIR + ' and try `wendy status`.\n',
+      );
+      return 1;
+    }
+
+    process.stdout.write('Companion started at ' + COMPANION_URL + '\n');
+  } else {
+    process.stdout.write('Companion already running at ' + COMPANION_URL + '\n');
   }
 
-  if (!healthy) {
-    process.stderr.write(
-      '[wendy] companion did not become ready within 5s — check ' +
-        AGENT_DIR +
-        ' and try `wendy status`.\n',
-    );
-    return 1;
-  }
+  const cfg = readConfig();
 
-  process.stdout.write('Companion started at ' + COMPANION_URL + '\n');
-
-  // Decide tunnel mode from the persisted config:
-  //  - urlType === 'permanent' + tunnelToken → start a named tunnel (URL is
-  //    fixed, no parsing). The local JWT is trusted (PRO licence verified
-  //    when the user ran `wendy configure-tunnel`); we don't re-check on
-  //    every start.
-  //  - otherwise → start a Cloudflare quick tunnel (`*.trycloudflare.com`).
-  if (savedConfig.urlType === 'permanent' && savedConfig.tunnelToken) {
+  // Named tunnel (PRO).
+  if (cfg.urlType === 'permanent' && cfg.tunnelToken) {
     process.stdout.write('Starting Cloudflare named tunnel...\n');
-    const ok = await startNamedTunnel(savedConfig.tunnelToken);
+    const ok = await startNamedTunnel(cfg.tunnelToken);
     if (ok) {
-      const publicUrl = savedConfig.publicUrl || '';
+      const publicUrl = cfg.publicUrl || '';
       if (publicUrl) {
         process.stdout.write('Public URL: ' + publicUrl + '\n');
       } else {
-        process.stdout.write(
-          'Named tunnel started — public URL not configured locally; check the Cloudflare dashboard.\n',
-        );
+        process.stdout.write('Named tunnel started — check Cloudflare dashboard for URL.\n');
       }
     } else {
-      process.stderr.write(
-        '[wendy] named tunnel unavailable — companion is reachable only on ' +
-          COMPANION_URL +
-          '.\n',
-      );
+      process.stderr.write('[wendy] named tunnel unavailable — companion reachable only on ' + COMPANION_URL + '.\n');
     }
+    // Named tunnel: the cloudflared process keeps wendy alive via waitForProcess below.
     return 0;
   }
 
   // Quick tunnel (default).
-  process.stdout.write(
-    'Starting Cloudflare tunnel, this may take ~10s...\n',
-  );
-  const publicUrl = await startQuickTunnel(COMPANION_URL);
-  if (publicUrl) {
-    const cfg = readConfig();
-    cfg.publicUrl = publicUrl;
+  process.stdout.write('Starting Cloudflare tunnel, this may take ~10s...\n');
+  const result = await startQuickTunnel(COMPANION_URL);
+  if (result.url) {
+    cfg.publicUrl = result.url;
     writeConfig(cfg);
-    process.stdout.write('Public URL: ' + publicUrl + '\n');
+    process.stdout.write('Public URL: ' + result.url + '\n');
   } else {
     process.stderr.write(
-      '[wendy] tunnel unavailable — companion is reachable only on ' +
-        COMPANION_URL +
-        '.\n',
+      '[wendy] tunnel unavailable — companion reachable only on ' + COMPANION_URL + '.\n',
     );
+    return 0;
   }
 
+  // Stay alive while the tunnel is running. Ctrl+C or `wendy stop` will
+  // terminate this process, which kills the tunnel child and clears the URL.
+  process.on('SIGINT', function () {
+    if (result.process) try { result.process.kill(); } catch (_) {}
+    const c = readConfig(); delete c.publicUrl; writeConfig(c);
+    process.exit(0);
+  });
+  process.on('SIGTERM', function () {
+    if (result.process) try { result.process.kill(); } catch (_) {}
+    const c = readConfig(); delete c.publicUrl; writeConfig(c);
+    process.exit(0);
+  });
+
+  if (result.process) {
+    await waitForProcess(result.process);
+  }
+  // Tunnel exited — clear the stale URL.
+  const c = readConfig(); delete c.publicUrl; writeConfig(c);
   return 0;
 }
 

@@ -283,6 +283,25 @@ function writeTunnelPid(pid) {
   }
 }
 
+function readTunnelPid() {
+  try {
+    const raw = fs.readFileSync(TUNNEL_PID_FILE, 'utf8').trim();
+    const pid = parseInt(raw, 10);
+    if (!Number.isFinite(pid) || pid <= 0) return null;
+    return pid;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearTunnelPidFile() {
+  try {
+    fs.unlinkSync(TUNNEL_PID_FILE);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
 /**
  * Spawn a Cloudflare quick tunnel pointing at the local companion. Resolves
  * with the public `https://<id>.trycloudflare.com` URL once cloudflared
@@ -370,6 +389,11 @@ async function cmdStart() {
     if (savedConfig.passwordHash) {
       env['COMPANION_PASSWORD_HASH'] = savedConfig.passwordHash;
     }
+    // Allow direct localhost HTTP calls (e.g. from MCP tool handlers) to bypass
+    // JWT session-cookie auth. The bypass only applies when the request comes
+    // from 127.0.0.1 without an X-Forwarded-For / cf-connecting-ip header, so
+    // it is never reachable via the public Cloudflare tunnel.
+    env['COMPANION_LOCALHOST_BYPASS'] = '1';
 
     let companionChild;
     try {
@@ -425,6 +449,16 @@ async function cmdStart() {
   }
 
   // Quick tunnel (default).
+  // Kill any orphaned cloudflared from a previous wendy session (e.g. the
+  // user ran `npm uninstall -g whiteboard-agent`, which removes the package
+  // but never kills running processes). Prevents a zombie from serving a
+  // stale URL that points at a dead port.
+  const orphanPid = readTunnelPid();
+  if (orphanPid && isProcessAlive(orphanPid)) {
+    try { process.kill(orphanPid, 'SIGTERM'); } catch (_) {}
+  }
+  clearTunnelPidFile();
+
   process.stdout.write('Starting Cloudflare tunnel, this may take ~10s...\n');
   const result = await startQuickTunnel(COMPANION_URL);
   if (result.url) {
@@ -440,16 +474,17 @@ async function cmdStart() {
 
   // Stay alive while the tunnel is running. Ctrl+C or `wendy stop` will
   // terminate this process, which kills the tunnel child and clears the URL.
-  process.on('SIGINT', function () {
+  const onSignal = function () {
     if (result.process) try { result.process.kill(); } catch (_) {}
     const c = readConfig(); delete c.publicUrl; writeConfig(c);
     process.exit(0);
-  });
-  process.on('SIGTERM', function () {
-    if (result.process) try { result.process.kill(); } catch (_) {}
-    const c = readConfig(); delete c.publicUrl; writeConfig(c);
-    process.exit(0);
-  });
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
+  // SIGHUP: sent when the controlling terminal closes (user closes the tab,
+  // SSH session drops, etc.). Without this handler Node.js exits but
+  // cloudflared would be left as an orphan.
+  process.on('SIGHUP', onSignal);
 
   if (result.process) {
     await waitForProcess(result.process);

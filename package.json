@@ -1,6 +1,6 @@
 {
   "name": "whiteboard-agent",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Wendy — the companion CLI for Whiteboard. Install once, draw with AI forever.",
   "keywords": [
     "whiteboard",

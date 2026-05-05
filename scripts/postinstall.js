@@ -167,6 +167,7 @@ function ensureAgentCredentials(configPath) {
   config.password = randomHex(8); // 16 hex chars, plaintext for the agent
   config.passwordHash = sha256(config.password);
   config.setupMode = 'agent';
+  config.passwordChanged = false;
   try {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
   } catch (err) {
